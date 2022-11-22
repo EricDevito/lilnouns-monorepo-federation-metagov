@@ -1,6 +1,7 @@
-import { FederationABI } from '...'
+import { FederationABI } from '...';
 import {
   ChainId,
+  useBlockMeta,
   useBlockNumber,
   useContractCall,
   useContractCalls,
@@ -17,6 +18,7 @@ import { useQuery } from '@apollo/client';
 import { federationProposalsQuery } from './subgraph';
 import BigNumber from 'bignumber.js';
 import { useBlockTimestamp } from '../hooks/useBlockTimestamp';
+import { ProposalData } from './nounsDao';
 
 //*FEDERATION TYPES
 enum Vote {
@@ -25,7 +27,7 @@ enum Vote {
   ABSTAIN = 2,
 }
 
-enum ProposalState {
+enum FederationProposalState {
   UNDETERMINED = -1,
   PENDING,
   ACTIVE,
@@ -36,106 +38,61 @@ enum ProposalState {
   EXPIRED,
   EXECUTED,
   VETOED,
+
   METAGOV_ACTIVE,
   METAGOV_CLOSED,
   METAGOV_PENDING,
+  METAGOV_VETOED,
 }
 
 interface ProposalCallResult {
   id: EthersBN;
-  abstainVotes: EthersBN;
-  againstVotes: EthersBN;
-  forVotes: EthersBN;
-  canceled: boolean;
-  vetoed: boolean;
-  executed: boolean;
+  proposer: string;
+  eDAO: string;
+  eID: EthersBN;
+  quorumVotes: EthersBN;
   startBlock: EthersBN;
   endBlock: EthersBN;
-  eta: EthersBN;
-  proposalThreshold: EthersBN;
-  proposer: string;
-  quorumVotes: EthersBN;
+  forVotes: EthersBN;
+  againstVotes: EthersBN;
+  abstainVotes: EthersBN;
 }
-
-interface ProposalDetail {
-  target: string;
-  value?: string;
-  functionSig: string;
-  callData: string;
-}
-
-interface Proposal {
+interface FederationProposal {
   id: string | undefined;
-  title: string;
-  description: string;
-  status: ProposalState;
+  proposer: string | undefined;
+  eDAO: string | undefined;
+  eID: number;
+  quorumVotes: number;
+  startBlock: number;
+  endBlock: number;
   forCount: number;
   againstCount: number;
   abstainCount: number;
-  createdBlock: number;
-  startBlock: number;
-  endBlock: number;
-  eta: Date | undefined;
-  proposer: string | undefined;
-  proposalThreshold: number;
-  quorumVotes: number;
-  details: ProposalDetail[];
-  transactionHash: string;
-  snapshotEnd?: number;
-  snapshotProposalId?: string;
-
-  snapshotForCount?: number;
-  snapshotAgainstCount?: number;
-  snapshotAbstainCount?: number;
+  status: FederationProposalState;
 }
 
-interface ProposalTransactionDetails {
-  targets: string[];
-  values: string[];
-  signatures: string[];
-  calldatas: string[];
-}
-
-interface ProposalSubgraphEntity extends ProposalTransactionDetails {
+interface ProposalSubgraphEntity {
   id: string;
-  description: string;
-  status: keyof typeof ProposalState;
+  proposer: { id: string };
+  eDAO: string;
+  eID: string;
+  quorumVotes: string;
+  startBlock: string;
+  endBlock: string;
   forVotes: string;
   againstVotes: string;
   abstainVotes: string;
-  createdBlock: string;
-  createdTransactionHash: string;
-  startBlock: string;
-  endBlock: string;
-  executionETA: string | null;
-  proposer: { id: string };
-  proposalThreshold: string;
-  quorumVotes: string;
+  status: keyof typeof FederationProposalState;
 }
 
-interface ProposalData {
-  data: Proposal[];
+interface FederationProposalData {
+  data: FederationProposal[];
   error?: Error;
   loading: boolean;
-}
-
-interface ProposalDataBig {
-  data: Proposal[];
-  error?: Error;
-  loading: boolean;
-}
-
-interface ProposalTransaction {
-  address: string;
-  value: string;
-  signature: string;
-  calldata: string;
 }
 
 const abi = new utils.Interface(FederationABI);
-const federationContract = new FederationLogicFactory().attach(
-  'federationAddress',
-);
+const federationContract = new FederationLogicFactory().attach('federationAddress');
 
 // Start the log search at the mainnet deployment block to speed up log queries
 const fromBlock = CHAIN_ID === ChainId.Mainnet ? 12985453 : 0;
@@ -152,38 +109,7 @@ const proposalCreatedFilter = {
   fromBlock,
 };
 
-const hashRegex = /^\s*#{1,6}\s+([^\n]+)/;
-const equalTitleRegex = /^\s*([^\n]+)\n(={3,25}|-{3,25})/;
-
-/**
- * Extract a markdown title from a proposal body that uses the `# Title` format
- * Returns null if no title found.
- */
-const extractHashTitle = (body: string) => body.match(hashRegex);
-/**
- * Extract a markdown title from a proposal body that uses the `Title\n===` format.
- * Returns null if no title found.
- */
-const extractEqualTitle = (body: string) => body.match(equalTitleRegex);
-
-/**
- * Extract title from a proposal's body/description. Returns null if no title found in the first line.
- * @param body proposal body
- */
-const extractTitle = (body: string | undefined): string | null => {
-  if (!body) return null;
-  const hashResult = extractHashTitle(body);
-  const equalResult = extractEqualTitle(body);
-  return hashResult ? hashResult[1] : equalResult ? equalResult[1] : null;
-};
-
-const removeBold = (text: string | null): string | null =>
-  text ? text.replace(/\*\*/g, '') : text;
-const removeItalics = (text: string | null): string | null =>
-  text ? text.replace(/__/g, '') : text;
-
-const removeMarkdownStyle = R.compose(removeBold, removeItalics);
-
+//TODO: REVIEW (quorumBPS via prop or default?)
 export const useCurrentQuorum = (
   dao: string,
   proposalId: number,
@@ -202,6 +128,7 @@ export const useCurrentQuorum = (
   return quorum?.toNumber();
 };
 
+//TODO: REVIEW
 export const useHasVotedOnFederationProposal = (proposalId: string | undefined): boolean => {
   const { account } = useEthers();
 
@@ -216,6 +143,7 @@ export const useHasVotedOnFederationProposal = (proposalId: string | undefined):
   return receipt?.hasVoted ?? false;
 };
 
+//TODO: REVIEW
 export const useFederationProposalVote = (proposalId: string | undefined): string => {
   const { account } = useEthers();
 
@@ -241,6 +169,7 @@ export const useFederationProposalVote = (proposalId: string | undefined): strin
   return '';
 };
 
+//TODO: REVIEW
 export const useFederationProposalCount = (): number | undefined => {
   const [count] =
     useContractCall<[EthersBN]>({
@@ -252,6 +181,7 @@ export const useFederationProposalCount = (): number | undefined => {
   return count?.toNumber();
 };
 
+//TODO: REVIEW
 export const useFederationProposalThreshold = (): number | undefined => {
   const [count] =
     useContractCall<[EthersBN]>({
@@ -263,6 +193,7 @@ export const useFederationProposalThreshold = (): number | undefined => {
   return count?.toNumber();
 };
 
+//TODO: REVIEW
 const useVotingDelay = (dao: string): number | undefined => {
   const [blockDelay] =
     useContractCall<[EthersBN]>({
@@ -278,132 +209,74 @@ const countToIndices = (count: number | undefined) => {
   return typeof count === 'number' ? new Array(count).fill(0).map((_, i) => [i + 1]) : [];
 };
 
-const formatFederationProposalTransactionDetails = (
-  details: ProposalTransactionDetails | Result,
-) => {
-  return details.targets.map((target: string, i: number) => {
-    const signature = details.signatures[i];
-    const value = EthersBN.from(
-      // Handle both logs and subgraph responses
-      (details as ProposalTransactionDetails).values?.[i] ?? (details as Result)?.[3]?.[i] ?? 0,
-    );
-    const [name, types] = signature.substring(0, signature.length - 1)?.split('(');
-    if (!name || !types) {
-      return {
-        target,
-        functionSig: name === '' ? 'transfer' : name === undefined ? 'unknown' : name,
-        callData: types ? types : value ? `${utils.formatEther(value)} ETH` : '',
-      };
-    }
-    const calldata = details.calldatas[i];
-    const decoded = defaultAbiCoder.decode(types.split(','), calldata);
-    return {
-      target,
-      functionSig: name,
-      callData: decoded.join(),
-      value: value.gt(0) ? `{ value: ${utils.formatEther(value)} ETH }` : '',
-    };
-  });
-};
-
-const useFormattedFederationProposalCreatedLogs = (skip: boolean, fromBlock?: number) => {
-  const filter = useMemo(
-    () => ({
-      ...proposalCreatedFilter,
-      ...(fromBlock ? { fromBlock } : {}),
-    }),
-    [fromBlock],
-  );
-  const useLogsResult = useLogs(!skip ? filter : undefined);
-
-  return useMemo(() => {
-    return useLogsResult?.logs?.map(log => {
-      const { args: parsed } = abi.parseLog(log);
-      return {
-        description: parsed.description,
-        transactionHash: log.transactionHash,
-        details: formatFederationProposalTransactionDetails(parsed),
-      };
-    });
-  }, [useLogsResult]);
-};
-
+//TODO: REVIEW
 const getFederationProposalState = (
   blockNumber: number | undefined,
   blockTimestamp: Date | undefined,
   proposal: ProposalSubgraphEntity,
 ) => {
-  const status = ProposalState[proposal.status];
-  if (status === ProposalState.PENDING) {
+  const status = FederationProposalState[proposal.status];
+  if (status === FederationProposalState.PENDING) {
     if (!blockNumber) {
-      return ProposalState.UNDETERMINED;
+      return FederationProposalState.UNDETERMINED;
     }
     if (blockNumber <= parseInt(proposal.startBlock)) {
-      return ProposalState.PENDING;
+      return FederationProposalState.PENDING;
     }
-    return ProposalState.ACTIVE;
+    return FederationProposalState.ACTIVE;
   }
-  if (status === ProposalState.ACTIVE) {
+  if (status === FederationProposalState.ACTIVE) {
     if (!blockNumber) {
-      return ProposalState.UNDETERMINED;
+      return FederationProposalState.UNDETERMINED;
     }
     if (blockNumber > parseInt(proposal.endBlock)) {
       const forVotes = new BigNumber(proposal.forVotes);
       if (forVotes.lte(proposal.againstVotes) || forVotes.lt(proposal.quorumVotes)) {
-        return ProposalState.DEFEATED;
-      }
-      if (!proposal.executionETA) {
-        return ProposalState.SUCCEEDED;
+        return FederationProposalState.DEFEATED;
       }
     }
     return status;
   }
-  if (status === ProposalState.QUEUED) {
-    if (!blockTimestamp || !proposal.executionETA) {
-      return ProposalState.UNDETERMINED;
+  if (status === FederationProposalState.QUEUED) {
+    if (!blockTimestamp) {
+      return FederationProposalState.UNDETERMINED;
     }
-    const GRACE_PERIOD = 14 * 60 * 60 * 24;
-    if (blockTimestamp.getTime() / 1_000 >= parseInt(proposal.executionETA) + GRACE_PERIOD) {
-      return ProposalState.EXPIRED;
-    }
+    // const GRACE_PERIOD = 14 * 60 * 60 * 24;
+    // if (blockTimestamp.getTime() / 1_000 >= parseInt(proposal.executionETA) + GRACE_PERIOD) {
+    //   return FederationProposalState.EXPIRED;
+    // }
     return status;
   }
   return status;
 };
 
-
-export const useAllFederationProposalsViaSubgraph = (): ProposalData => {
+//TODO: SETUP FEDERATION X LIL NOUNS SUBGRAPH
+export const useFederationProposalsViaSubgraph = (): FederationProposalData => {
   const { loading, data, error } = useQuery(federationProposalsQuery(), {
     context: { clientName: 'Federation' },
     fetchPolicy: 'no-cache',
   });
 
   const blockNumber = useBlockNumber();
-  const timestamp = useBlockTimestamp(blockNumber);
+  const { timestamp } = useBlockMeta();
 
-  const proposals = data?.daa?.map((proposal: ProposalSubgraphEntity) => {
-    const description = proposal.description?.replace(/\\n/g, '\n').replace(/(^['"]|['"]$)/g, '');
+  const proposals = data?.federationProposals.map((proposal: ProposalSubgraphEntity) => {
     return {
       id: proposal.id,
-      title: R.pipe(extractTitle, removeMarkdownStyle)(description) ?? 'Untitled',
-      description: description ?? 'No description.',
-      proposer: proposal.proposer.id,
-      status: getFederationProposalState(blockNumber, new Date((timestamp ?? 0) * 1000), proposal),
-      proposalThreshold: parseInt(proposal.proposalThreshold),
+      proposer: proposal.proposer,
+      eDAO: proposal.eDAO,
+      eID: proposal.eID,
       quorumVotes: parseInt(proposal.quorumVotes),
+      startBlock: parseInt(proposal.startBlock),
+      endBlock: parseInt(proposal.endBlock),
       forCount: parseInt(proposal.forVotes),
       againstCount: parseInt(proposal.againstVotes),
       abstainCount: parseInt(proposal.abstainVotes),
-      createdBlock: parseInt(proposal.createdBlock),
-      startBlock: parseInt(proposal.startBlock),
-      endBlock: parseInt(proposal.endBlock),
-      eta: proposal.executionETA ? new Date(Number(proposal.executionETA) * 1000) : undefined,
-      details: formatFederationProposalTransactionDetails(proposal),
-      transactionHash: proposal.createdTransactionHash,
+      status: getFederationProposalState(blockNumber, timestamp, proposal),
     };
   });
 
-  // console.log(`proposals??:  ${JSON.stringify(data.daa)}`);
+  // console.log(`proposals??:  ${JSON.stringify(data.federationProposals)}`);
 
   return {
     loading,
@@ -412,9 +285,11 @@ export const useAllFederationProposalsViaSubgraph = (): ProposalData => {
   };
 };
 
-
-export const useAllFederationProposalsViaChain = (skip = false): ProposalData => {
-  const proposalCount = useFederationProposalCount();
+//TODO: REVIEW
+export const useFederationProposalsViaChain = (
+  skip = false,
+): FederationProposalData => {
+  const proposalCount = useFederationProposalCount(); //? To fetch from federation or nouns dao?
   const votingDelay = useVotingDelay(federationContract.address);
 
   const govProposalIndexes = useMemo(() => {
@@ -432,59 +307,46 @@ export const useAllFederationProposalsViaChain = (skip = false): ProposalData =>
   };
 
   const proposals = useContractCalls<ProposalCallResult>(requests('proposals'));
-  const proposalStates = useContractCalls<[ProposalState]>(requests('state'));
-
-  const formattedLogs = useFormattedFederationProposalCreatedLogs(skip);
+  const federationproposalStates = useContractCalls<[FederationProposalState]>(requests('state'));
 
   // Early return until events are fetched
   return useMemo(() => {
-    const logs = formattedLogs ?? [];
-    if (proposals.length && !logs.length) {
+    if (proposals.length) {
       return { data: [], loading: true };
     }
 
     return {
       data: proposals.map((proposal, i) => {
-        const description = logs[i]?.description
-          ?.replace(/\\n/g, '\n')
-          .replace(/(^['"]|['"]$)/g, '');
         return {
           id: proposal?.id.toString(),
-          title: R.pipe(extractTitle, removeMarkdownStyle)(description) ?? 'Untitled',
-          description: description ?? 'No description.',
           proposer: proposal?.proposer,
-          status: proposalStates[i]?.[0] ?? ProposalState.UNDETERMINED,
-          proposalThreshold: parseInt(proposal?.proposalThreshold?.toString() ?? '0'),
+          eDAO: proposal?.eDAO,
+          eID: parseInt(proposal?.eID?.toString() ?? '0'),
           quorumVotes: parseInt(proposal?.quorumVotes?.toString() ?? '0'),
+          startBlock: parseInt(proposal?.startBlock?.toString() ?? ''),
+          endBlock: parseInt(proposal?.endBlock?.toString() ?? ''),
           forCount: parseInt(proposal?.forVotes?.toString() ?? '0'),
           againstCount: parseInt(proposal?.againstVotes?.toString() ?? '0'),
           abstainCount: parseInt(proposal?.abstainVotes?.toString() ?? '0'),
-          createdBlock: parseInt(proposal?.startBlock.sub(votingDelay ?? 0)?.toString() ?? ''),
-          startBlock: parseInt(proposal?.startBlock?.toString() ?? ''),
-          endBlock: parseInt(proposal?.endBlock?.toString() ?? ''),
-          eta: proposal?.eta ? new Date(proposal?.eta?.toNumber() * 1000) : undefined,
-          details: logs[i]?.details,
-          transactionHash: logs[i]?.transactionHash,
+          status: federationproposalStates[i]?.[0] ?? FederationProposalState.UNDETERMINED,
         };
       }),
       loading: false,
     };
-  }, [formattedLogs, proposalStates, proposals, votingDelay]);
+  }, [federationproposalStates, proposals, votingDelay]);
 };
 
-
-export const useAllFederationProposals = (): ProposalData => {
-  const subgraph = useAllFederationProposalsViaSubgraph();
-  const onchain = useAllFederationProposalsViaChain(!subgraph.error);
-  return subgraph?.error ? onchain : subgraph;
+//TODO: REVIEW (SUBGRAPH)
+export const useAllFederationProposals = (id: string | number): FederationProposalData => {
+  // const subgraph = useFederationProposalsViaSubgraph();
+  const onchain = useFederationProposalsViaChain(false); //(!subgraph.error);
+  return onchain; //subgraph?.error ? onchain : subgraph;
 };
-
-
-export const useFederationProposal = (id: string | number): Proposal | undefined => {
-  const { data } = useAllFederationProposalsViaSubgraph();
+//TODO: REVIEW (SUBGRAPH)
+export const useFederationProposal = (id: string | number): FederationProposal | undefined => {
+  const { data } = useFederationProposalsViaSubgraph();
   return data?.find(p => p.id === id.toString());
 };
-
 
 export const useCastFederationVote = () => {
   const { send: castVote, state: castVoteState } = useContractFunction(
@@ -494,7 +356,6 @@ export const useCastFederationVote = () => {
   return { castVote, castVoteState };
 };
 
-
 export const useCastFederationVoteWithReason = () => {
   const { send: castVoteWithReason, state: castVoteWithReasonState } = useContractFunction(
     federationContract,
@@ -503,17 +364,15 @@ export const useCastFederationVoteWithReason = () => {
   return { castVoteWithReason, castVoteWithReasonState };
 };
 
-
 export const useFederationPropose = () => {
   const { send: propose, state: proposeState } = useContractFunction(federationContract, 'propose');
   return { propose, proposeState };
 };
 
-
 export const useFederationExecuteProposal = () => {
-  const { send: executeProposal, state: executeProposalState } = useContractFunction(
+  const { send: executeProposal, state: executeFederationProposalState } = useContractFunction(
     federationContract,
     'execute',
   );
-  return { executeProposal, executeProposalState };
+  return { executeProposal, executeFederationProposalState };
 };
