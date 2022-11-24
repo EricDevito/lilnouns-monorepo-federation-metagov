@@ -27,7 +27,7 @@ enum Vote {
   ABSTAIN = 2,
 }
 
-enum FederationProposalState {
+export enum FederationProposalState {
   UNDETERMINED = -1,
   PENDING,
   ACTIVE,
@@ -57,11 +57,11 @@ interface ProposalCallResult {
   againstVotes: EthersBN;
   abstainVotes: EthersBN;
 }
-interface FederationProposal {
+export interface FederationProposal {
   id: string | undefined;
   proposer: string | undefined;
   eDAO: string | undefined;
-  eID: number;
+  eID: string | undefined;
   quorumVotes: number;
   startBlock: number;
   endBlock: number;
@@ -71,7 +71,7 @@ interface FederationProposal {
   status: FederationProposalState;
 }
 
-interface ProposalSubgraphEntity {
+export interface ProposalSubgraphEntity {
   id: string;
   proposer: { id: string };
   eDAO: string;
@@ -85,7 +85,7 @@ interface ProposalSubgraphEntity {
   status: keyof typeof FederationProposalState;
 }
 
-interface FederationProposalData {
+export interface FederationProposalData {
   data: FederationProposal[];
   error?: Error;
   loading: boolean;
@@ -251,7 +251,7 @@ const getFederationProposalState = (
 };
 
 //TODO: SETUP FEDERATION X LIL NOUNS SUBGRAPH
-export const useFederationProposalsViaSubgraph = (): FederationProposalData => {
+export const useAllFederationProposalsViaSubgraph = (): FederationProposalData => {
   const { loading, data, error } = useQuery(federationProposalsQuery(), {
     context: { clientName: 'Federation' },
     fetchPolicy: 'no-cache',
@@ -286,7 +286,7 @@ export const useFederationProposalsViaSubgraph = (): FederationProposalData => {
 };
 
 //TODO: REVIEW
-export const useFederationProposalsViaChain = (
+export const useAllFederationProposalsViaChain = (
   skip = false,
 ): FederationProposalData => {
   const proposalCount = useFederationProposalCount(); //? To fetch from federation or nouns dao?
@@ -321,7 +321,7 @@ export const useFederationProposalsViaChain = (
           id: proposal?.id.toString(),
           proposer: proposal?.proposer,
           eDAO: proposal?.eDAO,
-          eID: parseInt(proposal?.eID?.toString() ?? '0'),
+          eID: proposal?.eID?.toString(),
           quorumVotes: parseInt(proposal?.quorumVotes?.toString() ?? '0'),
           startBlock: parseInt(proposal?.startBlock?.toString() ?? ''),
           endBlock: parseInt(proposal?.endBlock?.toString() ?? ''),
@@ -336,16 +336,17 @@ export const useFederationProposalsViaChain = (
   }, [federationproposalStates, proposals, votingDelay]);
 };
 
-//TODO: REVIEW (SUBGRAPH)
+//TODO: REVIEW (REQUIRES SUBGRAPH)
 export const useAllFederationProposals = (id: string | number): FederationProposalData => {
-  // const subgraph = useFederationProposalsViaSubgraph();
-  const onchain = useFederationProposalsViaChain(false); //(!subgraph.error);
+  // const subgraph = useAllFederationProposalsViaSubgraph();
+  const onchain = useAllFederationProposalsViaChain(false); //(!subgraph.error);
   return onchain; //subgraph?.error ? onchain : subgraph;
 };
-//TODO: REVIEW (SUBGRAPH)
+
+//TODO: REVIEW (REQUIRES SUBGRAPH)
 export const useFederationProposal = (id: string | number): FederationProposal | undefined => {
-  const { data } = useFederationProposalsViaSubgraph();
-  return data?.find(p => p.id === id.toString());
+  const { data } = useAllFederationProposalsViaSubgraph();
+  return data?.find(p => p.eID === id.toString());
 };
 
 export const useCastFederationVote = () => {

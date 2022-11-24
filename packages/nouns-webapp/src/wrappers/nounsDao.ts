@@ -17,6 +17,7 @@ import config, { CHAIN_ID } from '../config';
 import { useQuery } from '@apollo/client';
 import { proposalsQuery } from './subgraph';
 import BigNumber from 'bignumber.js';
+import { FederationProposalState } from './federation';
 
 export enum Vote {
   AGAINST = 0,
@@ -86,6 +87,18 @@ export interface Proposal {
   snapshotForCount?: number;
   snapshotAgainstCount?: number;
   snapshotAbstainCount?: number;
+
+  metagov_id?: string | undefined;
+  metagov_proposer?: string | undefined;
+  metagov_eDAO?: string | undefined;
+  metagov_eID?: number;
+  metagov_quorumVotes?: number;
+  metagov_startBlock?: number;
+  metagov_endBlock?: number;
+  metagov_forCount?: number;
+  metagov_againstCount?: number;
+  metagov_abstainCount?: number;
+  metagov_status?: FederationProposalState;
 }
 
 export interface ProposalTransactionDetails {
