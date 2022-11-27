@@ -366,14 +366,14 @@ export const useCastFederationVoteWithReason = () => {
 };
 
 export const useFederationPropose = () => {
-  const { send: propose, state: proposeState } = useContractFunction(federationContract, 'propose');
-  return { propose, proposeState };
+  const { send: createFederationProposal, state: createFederationProposalState } = useContractFunction(federationContract, 'propose');
+  return { createFederationProposal, createFederationProposalState };
 };
 
 export const useFederationExecuteProposal = () => {
-  const { send: executeProposal, state: executeFederationProposalState } = useContractFunction(
+  const { send: executeFederationProposal, state: executeFederationProposalState } = useContractFunction(
     federationContract,
     'execute',
   );
-  return { executeProposal, executeFederationProposalState };
+  return { executeFederationProposal, executeFederationProposalState };
 };

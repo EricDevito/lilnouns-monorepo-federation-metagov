@@ -47,7 +47,13 @@ import { SearchIcon } from '@heroicons/react/solid';
 import ReactTooltip from 'react-tooltip';
 import DynamicQuorumInfoModal from '../../components/DynamicQuorumInfoModal';
 import config from '../../config';
-import { useFederationProposal } from '../../wrappers/federation';
+import {
+  FederationProposalState,
+  useFederationExecuteProposal,
+  useFederationProposal,
+  useFederationPropose,
+} from '../../wrappers/federation';
+import { getMetagovNounVotes } from '../../utils/getMetagovNounsVotes';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -114,22 +120,46 @@ const NounsVotePage = ({
   }));
 
   //* FEDERATION
-
   const firstFederationPropId = 110; //TODO: fetch eID of proposal 0 from contract/subgraph
   const isFederationProp = firstFederationPropId > firstFederationPropId;
 
-  // const {
-  //   data: federationInfo,
-  //   loading: loadingFederationInfo,
-  //   error: FederationError,
-  // } = useQuery(propUsingFederation(id ?? '0'), {
-  //   context: { clientName: 'Federation' },
-  //   skip: !proposal,
-  // });
-
   //* FEDERATION
   const federationProposal = useFederationProposal(id);
+  const isAwaitingFederationPropCreation = isFederationProp && !federationProposal == true;
 
+  //* FEDERATION - prop voters
+  const {
+    loading: federationVotesLoading,
+    error: federationVotesError,
+    data: federationVoters,
+  } = useQuery<ProposalVotes>(proposalVotesQuery(federationProposal?.id ?? '0'));
+  const federationVoterIds = federationVoters?.votes?.map(v => v.voter.id);
+
+  //* FEDERATION - delegateSnapshot
+  const {
+    loading: federationDelegatesLoading,
+    error: federationDelegatesError,
+    data: federationDelegateSnapshot,
+  } = useQuery<Delegates>(delegateNounsAtBlockQuery(federationVoterIds ?? [], federationProposal?.startBlock ?? 0), {
+    skip: !voters?.votes?.length,
+  });
+
+  //* FEDERATION - delegateToNounIds
+  const { delegates: federationDelegates } = federationDelegateSnapshot || {};
+  const federationDelegateToNounIds = federationDelegates?.reduce<Record<string, string[]>>((acc, curr) => {
+    acc[curr.id] = curr?.nounsRepresented?.map(nr => nr.id) ?? [];
+    return acc;
+  }, {});
+
+  //* FEDERATION - data
+  const federationData = federationVoters?.votes?.map(v => ({
+    delegate: v.voter.id,
+    supportDetailed: v.supportDetailed,
+    nounsRepresented: federationDelegateToNounIds?.[v.voter.id] ?? [],
+  }));
+
+
+  //TODO: Only fetch snapshot data if prop is pre federation metagov upgrade
   //* SNAPSHOT
   const {
     loading: snapshotProposalLoading,
@@ -137,7 +167,7 @@ const NounsVotePage = ({
     data: snapshotProposalData,
   } = useQuery(snapshotProposalsQuery(), {
     context: { clientName: 'NounsDAOSnapshot' },
-    skip: !proposal,
+    skip: !proposal && !isFederationProp,
   });
 
   //* SNAPSHOT
@@ -180,15 +210,19 @@ const NounsVotePage = ({
       },
     );
 
-  //TODO: Only fetch snapshot data if prop is pre federation metagov upgrade
-
   const [showVoteModal, setShowVoteModal] = useState<boolean>(false);
   const [showDynamicQuorumInfoModal, setShowDynamicQuorumInfoModal] = useState<boolean>(false);
   const [isDelegateView, setIsDelegateView] = useState(false);
-  const [isSnapshotView, setIsSnapshotView] = useState(true);
+  const [isLilNounView, setIsLilNounView] = useState(true);
 
   const [isQueuePending, setQueuePending] = useState<boolean>(false);
   const [isExecutePending, setExecutePending] = useState<boolean>(false);
+
+  //TODO: Add Pending state for metagov vote start
+  const [isCreateFederationPending, setCreateFederationPending] = useState<boolean>(false);
+
+  //TODO: Add Pending state for metagov vote execute
+  const [isFederationExecutePending, setExecuteFederationPending] = useState<boolean>(false);
 
   const dispatch = useAppDispatch();
   const setModal = useCallback((modal: AlertModal) => dispatch(setAlertModal(modal)), [dispatch]);
@@ -203,6 +237,13 @@ const NounsVotePage = ({
 
   const { queueProposal, queueProposalState } = useQueueBigNounProposal();
   const { executeProposal, executeProposalState } = useExecuteBigNounProposal();
+
+  //TODO: (REVIEW) Add Execute metagov prop
+  const { executeFederationProposal, executeFederationProposalState } =
+    useFederationExecuteProposal();
+
+  //TODO: (REVIEW) Add Start metagov prop
+  const { createFederationProposal, createFederationProposalState } = useFederationPropose();
 
   const timestamp = Date.now();
   const currentBlock = useBlockNumber();
@@ -256,15 +297,21 @@ const NounsVotePage = ({
       federationProposal.abstainCount
     : undefined;
   const federationForPercentage =
-    federationProposal && totalVotes ? (federationProposal.forCount * 100) / totalVotes : 0;
+    federationProposal && federationTotalVotes
+      ? (federationProposal.forCount * 100) / federationTotalVotes
+      : 0;
   const federationAgainstPercentage =
-    federationProposal && totalVotes ? (federationProposal.againstCount * 100) / totalVotes : 0;
+    federationProposal && federationTotalVotes
+      ? (federationProposal.againstCount * 100) / federationTotalVotes
+      : 0;
   const federationAbstainPercentage =
-    federationProposal && totalVotes ? (federationProposal.abstainCount * 100) / totalVotes : 0;
+    federationProposal && federationTotalVotes
+      ? (federationProposal.abstainCount * 100) / federationTotalVotes
+      : 0;
 
   //* Only count available votes as of the proposal created block
   //TODO: (REVIEW) FEDERATION - if metagov is via federation useUserVotesAsOfBlock(federation startblock)
-  const availableVotes = !isSnapshotView
+  const availableVotes = !isLilNounView
     ? useUserVotesAsOfBlock(proposal?.createdBlock ?? undefined)
     : isFederationProp
     ? useUserVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
@@ -322,31 +369,56 @@ const NounsVotePage = ({
     };
   })();
 
-  //TODO: check if metagov prop has passed (votes casted into nouns dao)
-  const hasMetagovSucceeded = proposal?.status === ProposalState.METAGOV_CLOSED;
+  //TODO: (REVIEW) check if metagov prop has passed (votes casted into nouns dao)
+  const hasMetagovSucceeded = federationProposal?.status === FederationProposalState.SUCCEEDED;
   const isAwaitingMetagovStateChange = () => {
     if (hasMetagovSucceeded) {
       return true;
     }
-    if (proposal?.status === ProposalState.QUEUED) {
+
+    //?QUEUED, SUCCEEDED or EXECUTED?
+    if (federationProposal?.status === FederationProposalState.SUCCEEDED) {
       return new Date() >= (proposal?.eta ?? Number.MAX_SAFE_INTEGER);
     }
+
+    //propose metagov proposal
+    //TODO: (REVIEW) - Change !federationProposal in isAwaitingFederationPropCreation for a better way to check if metagove proposal has been proposed
+    if (isAwaitingFederationPropCreation) {
+      return true;
+    }
+
     return false;
   };
 
-  //TODO: Create "Start Vote" button action for federation props (isFederationProp)
-  const metagovStateButtonAction = hasSucceeded ? 'Queue' : 'Execute';
+  //TODO: (REVIEW) - Create "Start Vote" button action for federation props (isFederationProp)
+  const metagovStateButtonAction = isAwaitingFederationPropCreation
+    ? 'Start Voting'
+    : hasMetagovSucceeded
+    ? 'Cast Vote into Nouns DAO'
+    : '';
   const metagovStateAction = (() => {
-    if (hasSucceeded) {
+    if (hasMetagovSucceeded) {
       return () => {
         if (proposal?.id) {
-          return queueProposal(proposal.id);
+          //TODO: FEDERATION - execute or queue?
+          return executeFederationProposal(proposal.id);
         }
       };
     }
+
+    //propose metagov proposal
+    //TODO: (REVIEW) - Change !federationProposal in isAwaitingFederationPropCreation for a better way to check if metagove proposal has been proposed
+    if (isAwaitingFederationPropCreation) {
+      return () => {
+        if (proposal?.id) {
+          return createFederationProposal('eDAO', proposal?.id);
+        }
+      };
+    }
+
     return () => {
       if (proposal?.id) {
-        return executeProposal(proposal.id);
+        return executeFederationProposal(proposal.id);
       }
     };
   })();
@@ -408,6 +480,28 @@ const NounsVotePage = ({
     [executeProposalState, onTransactionStateChange, setModal],
   );
 
+  //TODO: (REVIEW) Federation prop creation txn (propose)
+  useEffect(
+    () =>
+      onTransactionStateChange(
+        createFederationProposalState,
+        'Proposal Created!',
+        setCreateFederationPending,
+      ),
+    [createFederationProposalState, onTransactionStateChange, setModal],
+  );
+
+  //TODO: (REVIEW) Federation execute prop txn (execute)
+  useEffect(
+    () =>
+      onTransactionStateChange(
+        executeFederationProposalState,
+        'Metagov Proposal Executed!',
+        setExecuteFederationPending,
+      ),
+    [executeFederationProposalState, onTransactionStateChange, setModal],
+  );
+
   const [showToast, setShowToast] = useState(true);
   useEffect(() => {
     if (showToast) {
@@ -417,6 +511,9 @@ const NounsVotePage = ({
     }
   }, [showToast]);
 
+  const federationLoading = federationVotesLoading || federationDelegatesLoading;
+  const federationError = federationVotesError || federationDelegatesError;
+
   if (
     !proposal ||
     loading ||
@@ -425,7 +522,8 @@ const NounsVotePage = ({
     snapshotVoteLoading ||
     lilnounsDelegatedVotesLoading ||
     loadingDQInfo ||
-    !dqInfo
+    !dqInfo || federationLoading || federationError
+    
   ) {
     return (
       <div className={classes.spinner}>
@@ -446,16 +544,12 @@ const NounsVotePage = ({
   const isWalletConnected = !(activeAccount === undefined);
   const isActiveForVoting = !snapProp ? false : snapProp.state == 'active' ? true : false;
 
-  //TODO: Change to prepareMetagov() and if check snapshot/federation
+  //TODO: (REVIEW) Change to prepareMetagov() and if check snapshot/federation
   const prepareSnapshot = (): SnapshotProp => {
     let propStatus = proposal.status;
+    const metagovState = isFederationProp ? federationProposal?.status : snapProp.state;
 
-    if (isFederationProp) {
-      //TODO: prepare federation object
-      //...
-    }
-
-    if (!snapProp && !isFederationProp) {
+    if (!snapProp && isFederationProp) {
       const snap: SnapshotProp = {
         forSnapshotNounIds: [],
         againstSnapshotNounIds: [],
@@ -471,7 +565,7 @@ const NounsVotePage = ({
 
       return snap;
     }
-
+    //TODO: FEDERATION - Find out how to fetch vote
     const snapVotes: SnapshotVoters[] = Object.values(
       snapshotVoteData?.votes.reduce((res: any, obj: SnapshotVoters, i: number) => {
         const delegatedVoterRepresentedNounIds = lilnounsDelegatedVotesData?.delegates
@@ -490,7 +584,77 @@ const NounsVotePage = ({
       }, []),
     );
 
-    switch (snapProp.state) {
+    if (isFederationProp) {
+      //TODO: (REVIEW) prepare federation object
+      //* Available federation states
+      //   if (proposal.vetoed) {
+      //     return ProposalState.Vetoed;
+      // } else if (proposal.executed) {
+      //     return ProposalState.Executed;
+      // } else if (block.number > proposal.endBlock) {
+      //     return ProposalState.Expired;
+      // } else {
+      //     return ProposalState.Active;
+      // }
+
+      //TODO: Override in the event nouns prop is cancelled
+      switch (metagovState) {
+        case FederationProposalState.ACTIVE:
+          if (proposal.status == ProposalState.PENDING || proposal.status == ProposalState.ACTIVE) {
+            propStatus = ProposalState.METAGOV_ACTIVE; // active metagov vote
+          } else {
+            propStatus = proposal.status;
+          }
+          break;
+
+        case FederationProposalState.EXECUTED:
+          if (proposal.status == ProposalState.ACTIVE) {
+            propStatus = ProposalState.METAGOV_CLOSED; // pending nouns vote
+            break;
+          }
+          propStatus = proposal.status;
+          break;
+
+        case FederationProposalState.EXPIRED:
+          propStatus = ProposalState.METAGOV_CLOSED; //TODO: METAGOV_EXPIRED
+          break;
+
+        case FederationProposalState.VETOED:
+          if (proposal.status == ProposalState.ACTIVE) {
+            propStatus = ProposalState.VETOED;
+            break;
+          }
+          propStatus = proposal.status;
+          break;
+
+        // case 'pending':
+        //   propStatus = ProposalState.PENDING;
+        //   break;
+
+        default:
+          if (proposal.status) {
+          }
+          propStatus = proposal.status;
+          break;
+      }
+
+      const snap: SnapshotProp = {
+        forSnapshotNounIds: getMetagovNounVotes(federationData, 1),
+        againstSnapshotNounIds: getMetagovNounVotes(federationData, 0),
+        abstainSnapshotNounIds: getMetagovNounVotes(federationData, 2),
+        snapshotPropEndDate: federationStartDate,
+        snapshotPropStartDate: federationEndDate,
+        propStatus: propStatus,
+        snapshotForCountAmt: federationProposal?.forCount ?? 0,
+        snapshotAgainstCountAmt: federationProposal?.againstCount ?? 0,
+        snapshotAbstainCountAmt: federationProposal?.abstainCount ?? 0,
+        snapshotVoters: [],
+      };
+
+      return snap;
+    }
+
+    switch (metagovState) {
       case 'active':
         if (proposal.status == ProposalState.PENDING || proposal.status == ProposalState.ACTIVE) {
           propStatus = ProposalState.METAGOV_ACTIVE;
@@ -536,60 +700,31 @@ const NounsVotePage = ({
 
   const fetchedValues = prepareSnapshot();
 
-  const forSnapshotNounIds = fetchedValues.forSnapshotNounIds;
-  const againstSnapshotNounIds = fetchedValues.againstSnapshotNounIds;
-  const abstainSnapshotNounIds = fetchedValues.abstainSnapshotNounIds;
-
-  const snapshotPropEndDate = fetchedValues.snapshotPropEndDate;
-  const snapshotPropStartDate = fetchedValues.snapshotPropStartDate;
-
   //TODO: (REVIEW) Check if prop metagov is via snapshot or federation
   const metagovStartOrEndTimeCopy = () => {
-    if (isFederationProp) {
-      if (federationStartDate?.isBefore(now) && federationEndDate?.isAfter(now)) {
-        return 'Snapshot Ends';
-      }
-      if (federationEndDate?.isBefore(now)) {
-        return 'Ended';
-      }
-      return 'Starts';
-    } else {
-      if (snapshotPropStartDate?.isBefore(now) && snapshotPropEndDate?.isAfter(now)) {
-        return 'Snapshot Ends';
-      }
-      if (snapshotPropEndDate?.isBefore(now)) {
-        return 'Ended';
-      }
-      return 'Starts';
+    if (
+      fetchedValues.snapshotPropStartDate?.isBefore(now) &&
+      fetchedValues.snapshotPropEndDate?.isAfter(now)
+    ) {
+      return 'Snapshot Ends';
     }
+    if (fetchedValues.snapshotPropEndDate?.isBefore(now)) {
+      return 'Ended';
+    }
+    return 'Starts';
   };
 
   //TODO: (REVIEW) Check if prop metagov is via snapshot or federation
   const metagovStartOrEndTimeTime = () => {
-    if (isFederationProp) {
-      if (federationStartDate !== undefined) {
-        if (!federationStartDate?.isBefore(now)) {
-          return federationStartDate;
-        }
-
-        return federationEndDate;
+    if (fetchedValues.snapshotPropStartDate !== undefined) {
+      if (!fetchedValues.snapshotPropStartDate?.isBefore(now)) {
+        return fetchedValues.snapshotPropStartDate;
       }
-    } else {
-      if (snapshotPropStartDate !== undefined) {
-        if (!snapshotPropStartDate?.isBefore(now)) {
-          return snapshotPropStartDate;
-        }
-
-        return snapshotPropEndDate;
-      }
+      return fetchedValues.snapshotPropEndDate;
     }
 
     return undefined;
   };
-
-  const metagovForCountAmt = fetchedValues.snapshotForCountAmt;
-  const metagovAgainstCountAmt = fetchedValues.snapshotAgainstCountAmt;
-  const metagovAbstainCountAmt = fetchedValues.snapshotAbstainCountAmt;
 
   proposal.status = fetchedValues.propStatus;
 
@@ -623,6 +758,22 @@ const NounsVotePage = ({
         )}
       </Col>
       <Col lg={10} className={clsx(classes.proposal, classes.wrapper)}>
+        {/* //TODO: {REVIEW) FEDERATION - REFACTOR FOR EXECUTE AND PROPOSE */}
+        {isAwaitingMetagovStateChange() && (
+          <Button
+            onClick={metagovStateAction}
+            disabled={isCreateFederationPending || isFederationExecutePending}
+            variant="danger"
+            className={classes.metagovTransitionStateButton}
+          >
+            {isCreateFederationPending || isFederationExecutePending ? (
+              <Spinner animation="border" />
+            ) : (
+              `${metagovStateButtonAction} ⌐◧-◧`
+            )}
+          </Button>
+        )}
+
         {isAwaitingStateChange() && (
           <Row className={clsx(classes.section, classes.transitionStateButtonSection)}>
             <Col className="d-grid">
@@ -644,83 +795,59 @@ const NounsVotePage = ({
 
         <p
           onClick={() => {
-            //TODO: implement delegate view
-            // if (isDelegateView) {
-            //   setIsDelegateView(false);
-            //   if(snapProp) {
-            //     setIsSnapshotView(true);
-            //   }
-
-            // }
-
-            if (isSnapshotView) {
-              // setIsDelegateView(false);
-              setIsSnapshotView(false);
+            if (isLilNounView) {
+              setIsLilNounView(false);
             }
 
-            // if (!isDelegateView && !isSnapshotView) {
-            //   !isMobile ? setIsDelegateView(true) : setIsSnapshotView(true);
-            // }
-
-            if (!isSnapshotView) {
-              setIsSnapshotView(true);
+            if (!isLilNounView) {
+              setIsLilNounView(true);
             }
           }}
           className={classes.toggleVoteView}
         >
-          {/* {!snapProp
-            ? isDelegateView
-              ? 'Switch to Noun view'
-              : 'Switch to delegate view'
-            : !isMobile
-            ? isDelegateView
-              ? 'Switch to Lil Noun view'
-              : isSnapshotView
-              ? 'Switch to Noun view'
-              : 'Switch to delegate view'
-            : isSnapshotView
-            ? 'Switch to Noun view'
-            : 'Switch to Lil Noun view'} */}
-
-          {isSnapshotView ? 'Switch to Noun view' : 'Switch to Lil Noun view'}
+          {isLilNounView ? 'Switch to Noun view' : 'Switch to Lil Noun view'}
         </p>
 
         <Row>
           <VoteCard
             proposal={proposal}
-            percentage={forPercentage}
+            percentage={isLilNounView && isFederationProp ? forPercentage : federationForPercentage}
             nounIds={forNouns}
-            lilnounIds={forSnapshotNounIds}
+            lilnounIds={fetchedValues.forSnapshotNounIds}
             variant={VoteCardVariant.FOR}
             delegateView={isDelegateView}
-            snapshotView={isSnapshotView}
+            snapshotView={isLilNounView}
             delegateGroupedVoteData={data}
             isNounsDAOProp={true}
-            snapshotVoteCount={metagovForCountAmt}
+            snapshotVoteCount={fetchedValues.snapshotForCountAmt}
           />
           <VoteCard
             proposal={proposal}
-            percentage={againstPercentage}
+            percentage={
+              isLilNounView && isFederationProp ? againstPercentage : federationAgainstPercentage
+            }
             nounIds={againstNouns}
-            lilnounIds={againstSnapshotNounIds}
+            lilnounIds={fetchedValues.againstSnapshotNounIds}
             variant={VoteCardVariant.AGAINST}
             delegateView={isDelegateView}
-            snapshotView={isSnapshotView}
+            snapshotView={isLilNounView}
             delegateGroupedVoteData={data}
             isNounsDAOProp={true}
-            snapshotVoteCount={metagovAgainstCountAmt}
+            snapshotVoteCount={fetchedValues.snapshotAgainstCountAmt}
           />
           <VoteCard
             proposal={proposal}
-            percentage={abstainPercentage}
+            percentage={
+              isLilNounView && isFederationProp ? abstainPercentage : federationAbstainPercentage
+            }
             nounIds={abstainNouns}
-            lilnounIds={abstainSnapshotNounIds}
+            lilnounIds={fetchedValues.abstainSnapshotNounIds}
             variant={VoteCardVariant.ABSTAIN}
             delegateView={isDelegateView}
-            snapshotView={isSnapshotView}
+            snapshotView={isLilNounView}
             delegateGroupedVoteData={data}
             isNounsDAOProp={true}
-            snapshotVoteCount={metagovAbstainCountAmt}
+            snapshotVoteCount={fetchedValues.snapshotAbstainCountAmt}
           />
         </Row>
 
@@ -733,7 +860,7 @@ const NounsVotePage = ({
                   <div className={classes.voteMetadataRowTitle}>
                     <h1>Threshold</h1>
                   </div>
-                  {!isSnapshotView && isV2Prop && (
+                  {!isLilNounView && isV2Prop && (
                     <ReactTooltip
                       id={'view-dq-info'}
                       className={classes.delegateHover}
@@ -746,14 +873,12 @@ const NounsVotePage = ({
                     data-for="view-dq-info"
                     data-tip="View Dynamic Quorum Info"
                     onClick={() =>
-                      setShowDynamicQuorumInfoModal(true && isV2Prop && !isSnapshotView)
+                      setShowDynamicQuorumInfoModal(true && isV2Prop && !isLilNounView)
                     }
                     className={clsx(classes.thresholdInfo, isV2Prop ? classes.cursorPointer : '')}
                   >
-                    <span>
-                      {isSnapshotView ? 'Quorum' : isV2Prop ? 'Current Quorum' : 'Quorum'}
-                    </span>
-                    {isSnapshotView ? (
+                    <span>{isLilNounView ? 'Quorum' : isV2Prop ? 'Current Quorum' : 'Quorum'}</span>
+                    {isLilNounView ? (
                       <h3>N/A</h3>
                     ) : (
                       <h3>
@@ -771,26 +896,26 @@ const NounsVotePage = ({
               <Card.Body className="p-2">
                 <Row className={classes.voteMetadataRow}>
                   <Col className={classes.voteMetadataRowTitle}>
-                    <h1>{!isSnapshotView ? startOrEndTimeCopy() : metagovStartOrEndTimeCopy()}</h1>
+                    <h1>{!isLilNounView ? startOrEndTimeCopy() : metagovStartOrEndTimeCopy()}</h1>
                   </Col>
                   <Col className={classes.voteMetadataTime}>
                     <span>
                       {metagovStartOrEndTimeTime() !== undefined
-                        ? !isSnapshotView
+                        ? !isLilNounView
                           ? startOrEndTimeTime() && startOrEndTimeTime()?.format('h:mm A z')
                           : metagovStartOrEndTimeTime() &&
                             metagovStartOrEndTimeTime()?.format('h:mm A z')
-                        : !isSnapshotView
+                        : !isLilNounView
                         ? startOrEndTimeTime() && startOrEndTimeTime()?.format('h:mm A z')
                         : 'Time'}
                     </span>
                     <h3>
                       {metagovStartOrEndTimeTime() !== undefined
-                        ? !isSnapshotView
+                        ? !isLilNounView
                           ? startOrEndTimeTime() && startOrEndTimeTime()?.format('MMM D, YYYY')
                           : metagovStartOrEndTimeTime() &&
                             metagovStartOrEndTimeTime()?.format('MMM D, YYYY')
-                        : !isSnapshotView
+                        : !isLilNounView
                         ? startOrEndTimeTime() && startOrEndTimeTime()?.format('MMM D, YYYY')
                         : 'N/A'}
                     </h3>
