@@ -1,26 +1,22 @@
-import { FederationABI } from '...';
+import FederationABI from '../abi/federation/DelegateMultiToken.json';
 import {
   ChainId,
-  useBlockMeta,
-  useBlockNumber,
   useContractCall,
   useContractCalls,
   useContractFunction,
   useEthers,
 } from '@usedapp/core';
+import { Contract } from '@ethersproject/contracts';
 import { utils, BigNumber as EthersBN } from 'ethers';
-import { defaultAbiCoder, Result } from 'ethers/lib/utils';
-import { useMemo } from 'react';
 import { useLogs } from '../hooks/useLogs';
-import * as R from 'ramda';
-import config, { CHAIN_ID } from '../config';
-import { useQuery } from '@apollo/client';
-import { federationProposalsQuery } from './subgraph';
-import BigNumber from 'bignumber.js';
-import { useBlockTimestamp } from '../hooks/useBlockTimestamp';
-import { ProposalData } from './nounsDao';
+import { useMemo } from 'react';
+import { CHAIN_ID } from '../config';
 
-//*FEDERATION TYPES
+export const federationGenesisBlock = 12600000;
+const federationAddress = "0x0";
+const fromBlock = CHAIN_ID === ChainId.Mainnet ? federationGenesisBlock : 0;
+const abi = new utils.Interface(FederationABI);
+
 enum Vote {
   AGAINST = 0,
   FOR = 1,
@@ -28,35 +24,12 @@ enum Vote {
 }
 
 export enum FederationProposalState {
-  UNDETERMINED = -1,
-  PENDING,
-  ACTIVE,
-  CANCELLED,
-  DEFEATED,
-  SUCCEEDED,
-  QUEUED,
+  ACTIVE,  
   EXPIRED,
   EXECUTED,
   VETOED,
-
-  METAGOV_ACTIVE,
-  METAGOV_CLOSED,
-  METAGOV_PENDING,
-  METAGOV_VETOED,
 }
 
-interface ProposalCallResult {
-  id: EthersBN;
-  proposer: string;
-  eDAO: string;
-  eID: EthersBN;
-  quorumVotes: EthersBN;
-  startBlock: EthersBN;
-  endBlock: EthersBN;
-  forVotes: EthersBN;
-  againstVotes: EthersBN;
-  abstainVotes: EthersBN;
-}
 export interface FederationProposal {
   id: string | undefined;
   proposer: string | undefined;
@@ -65,24 +38,11 @@ export interface FederationProposal {
   quorumVotes: number;
   startBlock: number;
   endBlock: number;
-  forCount: number;
-  againstCount: number;
-  abstainCount: number;
-  status: FederationProposalState;
-}
-
-export interface ProposalSubgraphEntity {
-  id: string;
-  proposer: { id: string };
-  eDAO: string;
-  eID: string;
-  quorumVotes: string;
-  startBlock: string;
-  endBlock: string;
-  forVotes: string;
-  againstVotes: string;
-  abstainVotes: string;
-  status: keyof typeof FederationProposalState;
+  forVotes: number;
+  againstVotes: number;
+  abstainVotes: number;
+  vetoed: boolean | false;
+  executed: boolean | false;
 }
 
 export interface FederationProposalData {
@@ -91,12 +51,16 @@ export interface FederationProposalData {
   loading: boolean;
 }
 
-const abi = new utils.Interface(FederationABI);
-const federationContract = new FederationLogicFactory().attach('federationAddress');
 
-// Start the log search at the mainnet deployment block to speed up log queries
-const fromBlock = CHAIN_ID === ChainId.Mainnet ? 12985453 : 0;
-const proposalCreatedFilter = {
+export const useFederationContract = () => {
+  const { library } = useEthers();
+  const c = new Contract(federationAddress, abi, library);
+  return c
+}
+
+// start the log search at the mainnet deployment block to speed up log queries
+const proposalCreatedFilter = (federationContract: Contract)  => {  
+  return {
   ...federationContract.filters?.ProposalCreated(
     null, // newProposal.id,
     null, // msg.sender,
@@ -107,43 +71,39 @@ const proposalCreatedFilter = {
     null, // newProposal.quorumVotes
   ),
   fromBlock,
+  };
 };
 
-//TODO: REVIEW (quorumBPS via prop or default?)
-export const useCurrentQuorum = (
-  dao: string,
+export const useCurrentQuorum = (  
   proposalId: number,
   skip: boolean,
 ): number | undefined => {
   const request = () => {
     if (skip) return false;
     return {
-      abi,
-      address: dao,
-      method: 'quorumVotes',
+      abi,      
+      method: 'proposals',
       args: [proposalId],
     };
   };
-  const [quorum] = useContractCall<[EthersBN]>(request()) || [];
-  return quorum?.toNumber();
+  const [quorumVotes] = useContractCall<[EthersBN]>(request()) || [];
+  return quorumVotes?.toNumber();
 };
 
-//TODO: REVIEW
 export const useHasVotedOnFederationProposal = (proposalId: string | undefined): boolean => {
   const { account } = useEthers();
 
-  // Fetch a voting receipt for the passed proposal id
+  // fetch a voting receipt for the passed proposal id
   const [receipt] =
     useContractCall<[any]>({
       abi,
-      address: federationContract.address,
+      address: federationAddress,
       method: 'getReceipt',
       args: [proposalId, account],
     }) || [];
   return receipt?.hasVoted ?? false;
 };
 
-//TODO: REVIEW
 export const useFederationProposalVote = (proposalId: string | undefined): string => {
   const { account } = useEthers();
 
@@ -151,10 +111,11 @@ export const useFederationProposalVote = (proposalId: string | undefined): strin
   const [receipt] =
     useContractCall<[any]>({
       abi,
-      address: federationContract.address,
+      address: federationAddress,
       method: 'getReceipt',
       args: [proposalId, account],
     }) || [];
+
   const voteStatus = receipt?.support ?? -1;
   if (voteStatus === 0) {
     return 'Against';
@@ -169,128 +130,70 @@ export const useFederationProposalVote = (proposalId: string | undefined): strin
   return '';
 };
 
-//TODO: REVIEW
 export const useFederationProposalCount = (): number | undefined => {
   const [count] =
     useContractCall<[EthersBN]>({
       abi,
-      address: federationContract.address,
+      address: federationAddress,
       method: 'proposalCount',
       args: [],
     }) || [];
   return count?.toNumber();
 };
 
-//TODO: REVIEW
-export const useFederationProposalThreshold = (): number | undefined => {
-  const [count] =
-    useContractCall<[EthersBN]>({
-      abi,
-      address: federationContract.address,
-      method: 'proposalThreshold',
-      args: [],
-    }) || [];
-  return count?.toNumber();
-};
-
-//TODO: REVIEW
-const useVotingDelay = (dao: string): number | undefined => {
-  const [blockDelay] =
-    useContractCall<[EthersBN]>({
-      abi,
-      address: dao,
-      method: 'votingDelay',
-      args: [],
-    }) || [];
-  return blockDelay?.toNumber();
-};
-
 const countToIndices = (count: number | undefined) => {
   return typeof count === 'number' ? new Array(count).fill(0).map((_, i) => [i + 1]) : [];
 };
 
-//TODO: REVIEW
 const getFederationProposalState = (
   blockNumber: number | undefined,
-  blockTimestamp: Date | undefined,
-  proposal: ProposalSubgraphEntity,
+  proposal: FederationProposal,
 ) => {
-  const status = FederationProposalState[proposal.status];
-  if (status === FederationProposalState.PENDING) {
-    if (!blockNumber) {
-      return FederationProposalState.UNDETERMINED;
-    }
-    if (blockNumber <= parseInt(proposal.startBlock)) {
-      return FederationProposalState.PENDING;
-    }
+  if (proposal.vetoed) {
+    return FederationProposalState.VETOED;
+  } else if (proposal.executed) {
+    return FederationProposalState.EXECUTED;
+  } else if (blockNumber||0 > proposal.endBlock) {
+    return FederationProposalState.EXPIRED;
+  } else {
     return FederationProposalState.ACTIVE;
-  }
-  if (status === FederationProposalState.ACTIVE) {
-    if (!blockNumber) {
-      return FederationProposalState.UNDETERMINED;
-    }
-    if (blockNumber > parseInt(proposal.endBlock)) {
-      const forVotes = new BigNumber(proposal.forVotes);
-      if (forVotes.lte(proposal.againstVotes) || forVotes.lt(proposal.quorumVotes)) {
-        return FederationProposalState.DEFEATED;
-      }
-    }
-    return status;
-  }
-  if (status === FederationProposalState.QUEUED) {
-    if (!blockTimestamp) {
-      return FederationProposalState.UNDETERMINED;
-    }
-    // const GRACE_PERIOD = 14 * 60 * 60 * 24;
-    // if (blockTimestamp.getTime() / 1_000 >= parseInt(proposal.executionETA) + GRACE_PERIOD) {
-    //   return FederationProposalState.EXPIRED;
-    // }
-    return status;
-  }
-  return status;
+  }  
 };
 
-//TODO: SETUP FEDERATION X LIL NOUNS SUBGRAPH
-export const useAllFederationProposalsViaSubgraph = (): FederationProposalData => {
-  const { loading, data, error } = useQuery(federationProposalsQuery(), {
-    context: { clientName: 'Federation' },
-    fetchPolicy: 'no-cache',
-  });
+// get active proposals in federation contract
+const useFederationProposalCreatedLogs = (skip: boolean, fromBlock?: number) => {
+  const c = useFederationContract();
 
-  const blockNumber = useBlockNumber();
-  const { timestamp } = useBlockMeta();
+  const filter = useMemo(
+    () => ({
+      ...proposalCreatedFilter(c),
+      ...(fromBlock ? { fromBlock } : {}),
+    }),
+    [fromBlock],
+  );
 
-  const proposals = data?.federationProposals.map((proposal: ProposalSubgraphEntity) => {
-    return {
-      id: proposal.id,
-      proposer: proposal.proposer,
-      eDAO: proposal.eDAO,
-      eID: proposal.eID,
-      quorumVotes: parseInt(proposal.quorumVotes),
-      startBlock: parseInt(proposal.startBlock),
-      endBlock: parseInt(proposal.endBlock),
-      forCount: parseInt(proposal.forVotes),
-      againstCount: parseInt(proposal.againstVotes),
-      abstainCount: parseInt(proposal.abstainVotes),
-      status: getFederationProposalState(blockNumber, timestamp, proposal),
-    };
-  });
+  const useLogsResult = useLogs(!skip ? filter : undefined);
 
-  // console.log(`proposals??:  ${JSON.stringify(data.federationProposals)}`);
-
-  return {
-    loading,
-    error,
-    data: proposals ?? [],
-  };
+  return useMemo(() => {
+    return useLogsResult?.logs?.map(log => {
+      const { args: parsed } = abi.parseLog(log);
+      return {
+        id: parsed.id,
+        proposer: parsed.proposer,
+        eDAO: parsed.eDAO,
+        ePropID: parsed.ePropID,
+        startBlock: parsed.startBlock,
+        endBlock: parsed.endBlock,
+        quorumVotes: parsed.quorumVotes,
+      };
+    });
+  }, [useLogsResult]);
 };
 
-//TODO: REVIEW
 export const useAllFederationProposalsViaChain = (
   skip = false,
 ): FederationProposalData => {
-  const proposalCount = useFederationProposalCount(); //? To fetch from federation or nouns dao?
-  const votingDelay = useVotingDelay(federationContract.address);
+  const proposalCount = useFederationProposalCount();
 
   const govProposalIndexes = useMemo(() => {
     return countToIndices(proposalCount);
@@ -301,79 +204,73 @@ export const useAllFederationProposalsViaChain = (
     return govProposalIndexes.map(index => ({
       abi,
       method,
-      address: federationContract.address,
+      address: federationAddress,
       args: [index],
     }));
   };
 
-  const proposals = useContractCalls<ProposalCallResult>(requests('proposals'));
+  const proposals = useContractCalls<FederationProposal>(requests('proposals'));
   const federationproposalStates = useContractCalls<[FederationProposalState]>(requests('state'));
+  const createdLogs = useFederationProposalCreatedLogs(skip);
 
   // Early return until events are fetched
   return useMemo(() => {
-    if (proposals.length) {
+    const logs = createdLogs ?? [];
+    if (proposals.length && !logs.length) {
       return { data: [], loading: true };
     }
 
     return {
       data: proposals.map((proposal, i) => {
         return {
-          id: proposal?.id.toString(),
+          id: proposal?.id?.toString(),
           proposer: proposal?.proposer,
           eDAO: proposal?.eDAO,
           eID: proposal?.eID?.toString(),
           quorumVotes: parseInt(proposal?.quorumVotes?.toString() ?? '0'),
           startBlock: parseInt(proposal?.startBlock?.toString() ?? ''),
           endBlock: parseInt(proposal?.endBlock?.toString() ?? ''),
-          forCount: parseInt(proposal?.forVotes?.toString() ?? '0'),
-          againstCount: parseInt(proposal?.againstVotes?.toString() ?? '0'),
-          abstainCount: parseInt(proposal?.abstainVotes?.toString() ?? '0'),
-          status: federationproposalStates[i]?.[0] ?? FederationProposalState.UNDETERMINED,
+          forVotes: parseInt(proposal?.forVotes?.toString() ?? '0'),
+          againstVotes: parseInt(proposal?.againstVotes?.toString() ?? '0'),
+          abstainVotes: parseInt(proposal?.abstainVotes?.toString() ?? '0'),
+          vetoed: proposal?.vetoed || false,
+          executed: proposal?.executed || false,
         };
       }),
       loading: false,
     };
-  }, [federationproposalStates, proposals, votingDelay]);
+  }, [federationproposalStates, proposals]);
 };
 
-//TODO: REVIEW (REQUIRES SUBGRAPH)
-export const useAllFederationProposals = (id: string | number): FederationProposalData => {
-  // const subgraph = useAllFederationProposalsViaSubgraph();
-  const onchain = useAllFederationProposalsViaChain(false); //(!subgraph.error);
-  return onchain; //subgraph?.error ? onchain : subgraph;
+export const useAllFederationProposals = () : FederationProposalData => {
+  return useAllFederationProposalsViaChain(false);
 };
 
-//TODO: REVIEW (REQUIRES SUBGRAPH)
 export const useFederationProposal = (id: string | number): FederationProposal | undefined => {
-  const { data } = useAllFederationProposalsViaSubgraph();
-  return data?.find(p => p.eID === id.toString());
-};
-
-export const useCastFederationVote = () => {
-  const { send: castVote, state: castVoteState } = useContractFunction(
-    federationContract,
-    'castVote',
-  );
-  return { castVote, castVoteState };
+  const { data } = useAllFederationProposals();
+  return data?.find(p => p.id === id.toString());
 };
 
 export const useCastFederationVoteWithReason = () => {
+  const c = useFederationContract();
   const { send: castVoteWithReason, state: castVoteWithReasonState } = useContractFunction(
-    federationContract,
+    c,
     'castVote',
   );
   return { castVoteWithReason, castVoteWithReasonState };
 };
 
 export const useFederationPropose = () => {
-  const { send: createFederationProposal, state: createFederationProposalState } = useContractFunction(federationContract, 'propose');
-  return { createFederationProposal, createFederationProposalState };
+  const c = useFederationContract();
+  const { send: propose, state: proposeState } = useContractFunction(c, 'propose');
+  return { propose, proposeState };
 };
 
 export const useFederationExecuteProposal = () => {
-  const { send: executeFederationProposal, state: executeFederationProposalState } = useContractFunction(
-    federationContract,
+  const c = useFederationContract();
+  const { send: executeProposal, state: executeFederationProposalState } = useContractFunction(
+    c,
     'execute',
   );
-  return { executeFederationProposal, executeFederationProposalState };
+  return { executeProposal, executeFederationProposalState };
 };
