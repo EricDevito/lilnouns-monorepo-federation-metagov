@@ -521,7 +521,7 @@ const Proposals = ({
                     propStatus = p.status;
                   }
                 } else if(isFederationProp && !federationVoteObject) {
-                  propStatus =ProposalState.METAGOV_PENDING
+                  propStatus =ProposalState.METAGOV_AWAITING_INITIATION
                 }
 
                 const isPropInStateToHaveCountDown =

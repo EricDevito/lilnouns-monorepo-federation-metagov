@@ -483,7 +483,7 @@ const NounsVotePage = ({
   const metagovStateButtonAction = isAwaitingFederationPropCreation
     ? 'Start Vote'
     : isExecutable
-    ? `Cast ${voteDirection} Vote into Nouns DAO`
+    ? `Cast '${voteDirection}' Vote into Nouns DAO`
     : '';
 
   const metagovStateAction = (() => {
