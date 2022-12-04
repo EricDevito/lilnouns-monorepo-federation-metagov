@@ -6,19 +6,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { TransactionStatus } from '@usedapp/core';
 import NavBarButton, { NavBarButtonStyle } from '../NavBarButton';
 import clsx from 'clsx';
+import { FederationProposal, useCastFederationVoteWithReason } from '../../wrappers/federation';
 
 interface VoteModalProps {
   show: boolean;
   onHide: () => void;
   proposalId: string | undefined;
   availableVotes: number;
+  federationProposal?: FederationProposal
 }
 
 const POST_SUCESSFUL_VOTE_MODAL_CLOSE_TIME_MS = 3000;
 
-const VoteModal = ({ show, onHide, proposalId, availableVotes }: VoteModalProps): JSX.Element => {
+const VoteModal = ({ show, onHide, proposalId, availableVotes, federationProposal }: VoteModalProps): JSX.Element => {
   const { castVote, castVoteState } = useCastVote();
   const { castVoteWithReason, castVoteWithReasonState } = useCastVoteWithReason();
+  const { castVoteWithReason: castFederationVoteWithReason, castVoteWithReasonState: castFederationVoteWithReasonState } = useCastFederationVoteWithReason();
   const [vote, setVote] = useState<Vote>();
   const [voteReason, setVoteReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +73,11 @@ const VoteModal = ({ show, onHide, proposalId, availableVotes }: VoteModalProps)
   useEffect(() => {
     handleVoteStateChange(castVoteWithReasonState);
   }, [castVoteWithReasonState, handleVoteStateChange]);
+
+    // Cast federation vote with reason transaction state hook
+    useEffect(() => {
+      handleVoteStateChange(castFederationVoteWithReasonState);
+    }, [castFederationVoteWithReasonState, handleVoteStateChange]);
 
   // Auto close the modal after a transaction completes succesfully
   // Leave failed transaction up until user closes manually to allow for debugging
@@ -162,11 +170,20 @@ const VoteModal = ({ show, onHide, proposalId, availableVotes }: VoteModalProps)
                 return;
               }
               setIsLoading(true);
-              if (voteReason.trim() === '') {
-                castVote(proposalId, vote);
+              if (federationProposal) {
+                if (voteReason.trim() === '') {
+                  castFederationVoteWithReason(federationProposal.id, vote, '');
+                } else {
+                  castFederationVoteWithReason(federationProposal.id, vote, voteReason);
+                }
               } else {
-                castVoteWithReason(proposalId, vote, voteReason);
+                if (voteReason.trim() === '') {
+                  castVote(proposalId, vote);
+                } else {
+                  castVoteWithReason(proposalId, vote, voteReason);
+                }
               }
+           
             }}
             className={vote === undefined ? classes.submitBtnDisabled : classes.submitBtn}
           >

@@ -97,6 +97,26 @@ export const proposalsQuery = (first = 1_000) => gql`
 }
 `;
 
+export const federationProposalsQuery = (first = 1_000) => gql`
+{
+  proposals(first: ${first}, orderBy: startBlock, orderDirection: asc) {
+    id
+    eDAO
+    eID
+    proposer
+    quorumVotes
+    startBlock
+    endBlock
+    forVotes
+    againstVotes
+    abstainVotes
+    vetoed
+    executed
+    status
+  }
+}
+`;
+
 export const bigNounsProposalsQuery = (first = 1_000) => gql`
 {
 daa: proposals(first: ${first}, orderBy: createdBlock, orderDirection: asc) {
@@ -344,11 +364,15 @@ export const proposalVotesQuery = (proposalId: string) => gql`
   }
 `;
 
-export const proposalVotesQuerya = (proposalId: string) => gql`
+export const federationProposalVotesQuery = (proposalId: string) => gql`
   {
-    aa:votes(where: { proposal: "${proposalId}", votesRaw_gt: 0 }) {
+     votes(where: { proposal: "${proposalId}", votesRaw_gt: 0 }) {
+      id
       supportDetailed
-      voter {
+      reason
+      voter
+      proposal {
+        eID
         id
       }
     }	
@@ -358,6 +382,20 @@ export const proposalVotesQuerya = (proposalId: string) => gql`
 export const delegateNounsAtBlockQuery = (delegates: string[], block: number) => gql`
 {
   delegates(where: { id_in: ${JSON.stringify(delegates)} }, block: { number: ${block} }) {
+    id
+    delegatedVotes
+    nounsRepresented {
+      id
+    }
+  }
+}
+`;
+
+export const federationDelegateNounsAtBlockQuery = (delegates: string[], block: number) => gql`
+{
+ delegates(where: { id_in: ${JSON.stringify(
+    delegates,
+  )} }, block: { number: ${block} }) {
     id
     delegatedVotes
     nounsRepresented {

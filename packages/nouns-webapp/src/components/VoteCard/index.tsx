@@ -21,6 +21,7 @@ export enum VoteCardVariant {
 interface VoteCardProps {
   proposal: Proposal;
   percentage: number;
+  isLilNounView?: boolean;
   nounIds: Array<string>;
   variant: VoteCardVariant;
   isNounsDAOProp?: boolean;
@@ -37,13 +38,13 @@ const VoteCard: React.FC<VoteCardProps> = props => {
   const {
     proposal,
     percentage,
+    isLilNounView,
     nounIds,
     variant,
     isNounsDAOProp,
     delegateView,
     delegateGroupedVoteData,
     lilnounIds,
-    snapshotView,
     snapshotVoteCount,
   } = props;
   const isMobile = isMobileScreen();
@@ -58,19 +59,19 @@ const VoteCard: React.FC<VoteCardProps> = props => {
     case VoteCardVariant.FOR:
       titleClass = classes.for;
       titleCopy = 'For';
-      voteCount = snapshotView ? snapshotVoteCount : proposal.forCount;
+      voteCount = isLilNounView ? snapshotVoteCount : proposal.forCount;
       supportDetailedValue = 1;
       break;
     case VoteCardVariant.AGAINST:
       titleClass = classes.against;
       titleCopy = 'Against';
-      voteCount = snapshotView ? snapshotVoteCount : proposal.againstCount;
+      voteCount = isLilNounView ? snapshotVoteCount : proposal.againstCount;
       supportDetailedValue = 0;
       break;
     default:
       titleClass = classes.abstain;
       titleCopy = 'Abstain';
-      voteCount = snapshotView ? snapshotVoteCount : proposal.abstainCount;
+      voteCount = isLilNounView ? snapshotVoteCount : proposal.abstainCount;
       supportDetailedValue = 2;
       break;
   }
@@ -139,7 +140,7 @@ const VoteCard: React.FC<VoteCardProps> = props => {
                       </>
                     )}
                   </>
-                ) : snapshotView ? (
+                ) : isLilNounView ? (
                   <>
                     {voteCount}
                     {/* <span>Lil Nouns</span> */}
@@ -156,7 +157,7 @@ const VoteCard: React.FC<VoteCardProps> = props => {
             </Card.Text>
           )}
 
-          <VoteProgresBar variant={variant} percentage={snapshotView ? 0 : percentage} />
+          <VoteProgresBar variant={variant} percentage={percentage} />
           {!isMobile && (
             <Row className={classes.nounProfilePics}>
               {delegateView ? (
@@ -165,7 +166,7 @@ const VoteCard: React.FC<VoteCardProps> = props => {
                   propId={parseInt(proposal.id || '0')}
                   proposalCreationBlock={proposal.createdBlock}
                 />
-              ) : snapshotView ? (
+              ) : isLilNounView ? (
                 <NounImageVoteTable
                   nounIds={lilnounIds}
                   propId={parseInt(proposal.id || '0')}

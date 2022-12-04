@@ -16,12 +16,15 @@ import { useEthers } from '@usedapp/core';
 import { buildEtherscanAddressLink } from '../../utils/etherscan';
 import { transactionLink } from '../ProposalContent';
 import ShortAddress from '../ShortAddress';
+import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal } from '../../wrappers/federation';
 
 interface ProposalHeaderProps {
   proposal: Proposal;
   snapshotProposal?: SnapshotProposal;
   snapshotVoters?: SnapshotVoters[];
+  federationProposal?: FederationProposal;
   isNounsDAOProp?: boolean;
+  // isFederationProp?: boolean
   isActiveForVoting?: boolean;
   isWalletConnected: boolean;
   submitButtonClickHandler: () => void;
@@ -33,14 +36,21 @@ export const useHasVotedOnSnapshotProposal = (snapshotVoters: SnapshotVoters[] |
   return snapshotVoters.flatMap(a => a.voter).includes(account?.toLowerCase() ?? "") ? true : false
 };
 
+// export const useHasVotedOnFederationProposal = (snapshotVoters: SnapshotVoters[] | undefined): boolean => {
+//   if(!snapshotVoters) return false;
+//   const { account } = useEthers();
+//   return snapshotVoters.flatMap(a => a.voter).includes(account?.toLowerCase() ?? "") ? true : false
+// };
+
 const ProposalHeader: React.FC<ProposalHeaderProps> = props => {
-  const { proposal, isActiveForVoting, isWalletConnected, submitButtonClickHandler , snapshotProposal, isNounsDAOProp, snapshotVoters} = props;
+  const { proposal, isActiveForVoting, isWalletConnected, submitButtonClickHandler , snapshotProposal, federationProposal, isNounsDAOProp, snapshotVoters} = props;
+console.log(`federationProposala: ${federationProposal}`);
 
   const isMobile = isMobileScreen();
-  const availableVotes = useUserVotesAsOfBlock(proposal?.createdBlock) ?? 0;
-  const hasVoted = !snapshotProposal ? useHasVotedOnProposal(proposal?.id) : useHasVotedOnSnapshotProposal(snapshotVoters) 
-  const proposalVote = useProposalVote(proposal?.id);
-  const proposalCreationTimestamp = !snapshotProposal ? useBlockTimestamp(proposal?.createdBlock) : useBlockTimestamp(Number(snapshotProposal?.snapshot))
+  const availableVotes = useUserVotesAsOfBlock(federationProposal ? federationProposal?.startBlock : proposal?.createdBlock) ?? 1//0;
+  const hasVoted = federationProposal ? useHasVotedOnFederationProposal(federationProposal?.id) : !snapshotProposal ? useHasVotedOnProposal(proposal?.id) : useHasVotedOnSnapshotProposal(snapshotVoters) 
+  const proposalVote = federationProposal ? useFederationProposalVote(federationProposal?.id) : useProposalVote(proposal?.id);
+  const proposalCreationTimestamp = federationProposal ? useBlockTimestamp(federationProposal?.startBlock) : !snapshotProposal ? useBlockTimestamp(proposal?.createdBlock) : useBlockTimestamp(Number(snapshotProposal?.snapshot))
   const disableVoteButton = !isWalletConnected || !availableVotes;
 
   const voteButton = (

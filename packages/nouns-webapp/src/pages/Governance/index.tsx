@@ -17,6 +17,7 @@ import { useQuery } from '@apollo/client';
 import Link from '../../components/Link';
 import { RouteComponentProps } from 'react-router-dom';
 import { useLocation } from 'react-router-dom'
+import { useAllFederationProposals } from '../../wrappers/federation';
 
 const GovernancePage = ({
   match: {
@@ -56,6 +57,11 @@ const GovernancePage = ({
 
   const isMobile = isMobileScreen();
 
+
+  //* Federation
+  const { data: federationProposals, loading: loadingFederationProposals } = useAllFederationProposals();
+
+
   function setLilNounsDAOProps() {
     setDaoButtonActive('1');
     setisNounsDAOProp(false);
@@ -83,11 +89,16 @@ const GovernancePage = ({
     <Link text="Snapshot" url="https://snapshot.org/#/leagueoflils.eth" leavesPage={true} />
   );
 
+  const federationLink = (
+    <Link text="Federation" url="https://" leavesPage={true} />
+  )
+
   if (
     nounsInTreasuryLoading ||
     snapshotProposalLoading ||
     loadingBigNounProposals ||
-    loadingProposals
+    loadingProposals ||
+    loadingFederationProposals
   ) {
     return (
       <div className={classes.spinner}>
@@ -185,9 +196,7 @@ const GovernancePage = ({
 
               <Row>
                 <Col className={clsx(classes.ethTreasuryAmt)} lg={3}>
-                  <h1 className={classes.BigNounBalance}>
-                    {nounCount}
-                  </h1>
+                  <h1 className={classes.BigNounBalance}>{nounCount}</h1>
                   <h1>{' Nouns'}</h1>
                 </Col>
 
@@ -195,9 +204,13 @@ const GovernancePage = ({
                   <Col className={classes.usdTreasuryAmt}>
                     <Row className={classes.nounProfilePics}>
                       <NounImageInllineTable
-                        nounIds={nounsInTreasury.accounts.length ? nounsInTreasury.accounts[0].nouns.flatMap(
-                          (obj: { id: any }) => obj.id,
-                        ) : []}
+                        nounIds={
+                          nounsInTreasury.accounts.length
+                            ? nounsInTreasury.accounts[0].nouns.flatMap(
+                                (obj: { id: any }) => obj.id,
+                              )
+                            : []
+                        }
                       />
                     </Row>
                   </Col>
@@ -226,6 +239,10 @@ const GovernancePage = ({
           proposals={proposals}
           nounsDAOProposals={bigNounProposals}
           snapshotProposals={snapshotProposalData.proposals.map((v: any, i: any) => ({
+            ...v,
+            proposalNo: i + 1,
+          }))}
+          federationProposals={federationProposals.map((v: any, i: any) => ({
             ...v,
             proposalNo: i + 1,
           }))}

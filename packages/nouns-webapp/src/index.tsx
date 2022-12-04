@@ -123,6 +123,12 @@ const zoraAPILink = new HttpLink({
   uri: 'https://api.zora.co/graphql',
 });
 
+const federationLink = new HttpLink({
+  uri: 'https://api.thegraph.com/subgraphs/name/0xwizzz/federation-subgraph-gnars',
+});
+
+
+
 //pass them to apollo-client config
 const client = new ApolloClient({
   link: ApolloLink.split(
@@ -134,7 +140,11 @@ const client = new ApolloClient({
       ApolloLink.split(
         operation => operation.getContext().clientName === 'ZoraAPI',
         zoraAPILink,
-        defaultLink,
+        ApolloLink.split(
+          operation => operation.getContext().clientName === 'Federation',
+          federationLink,
+          defaultLink,
+        ),
       ),
     ),
   ),

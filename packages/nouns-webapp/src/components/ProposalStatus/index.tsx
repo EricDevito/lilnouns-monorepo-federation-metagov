@@ -11,7 +11,7 @@ const statusVariant = (status: ProposalState | undefined) => {
     case ProposalState.METAGOV_PENDING:
       return classes.primary;
     case ProposalState.METAGOV_CLOSED:
-    return classes.closedMetaGov;
+      return classes.closedMetaGov;
     case ProposalState.SUCCEEDED:
     case ProposalState.EXECUTED:
       return classes.success;
@@ -47,11 +47,19 @@ const statusText = (status: ProposalState | undefined) => {
     case ProposalState.EXPIRED:
       return 'Expired';
     case ProposalState.METAGOV_ACTIVE:
-      return 'Active Snapshot Vote';
+      return 'Active Lil Nouns Vote';
     case ProposalState.METAGOV_CLOSED:
       return 'Awaiting Nouns Vote'; //Pending Nouns Vote
-      case ProposalState.METAGOV_PENDING:
-        return 'Pending Snapshot Vote';
+    case ProposalState.METAGOV_PENDING:
+      return 'Pending Lil Nouns Vote';
+    case ProposalState.METAGOV_AWAITING_INITIATION:
+      return 'Ready to start';
+    case ProposalState.METAGOV_AWAITING_EXECUTION:
+      return 'Ready to execute';
+    case ProposalState.METAGOV_EXPIRED:
+      return 'Expired Lil Nouns Vote';
+    case ProposalState.METAGOV_VETOED:
+      return 'Vetoed Lil Nouns Vote';
     default:
       return 'Undetermined';
   }

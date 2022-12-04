@@ -8,6 +8,7 @@ import clsx from 'clsx';
 import { SnapshotProposal } from '../Proposals';
 import snapshot from '@snapshot-labs/snapshot.js';
 import { ethers } from 'ethers';
+import { FederationProposal } from '../../wrappers/federation';
 
 interface SnapshotVoteModalProps {
   show: boolean;
@@ -15,6 +16,7 @@ interface SnapshotVoteModalProps {
   proposalId: string | undefined;
   availableVotes: number;
   snapshotProposal: SnapshotProposal;
+  federationProposal: FederationProposal | undefined;
 }
 
 export enum SnapshotVote {
@@ -34,7 +36,6 @@ const SnapshotVoteModalModal = ({
 }: SnapshotVoteModalProps): JSX.Element => {
   const hub = 'https://hub.snapshot.org';
   const client = new snapshot.Client712(hub);
-
   const { library, account } = useEthers();
   const providers = new ethers.providers.Web3Provider(library?.provider!);
 
@@ -94,7 +95,7 @@ const SnapshotVoteModalModal = ({
         // console.log(`snapVote response ${JSON.stringify(res)}`);
         setIsLoading(false);
         setIsVoteSuccessful(true);
-  
+
         return;
       })
       .catch(err => {
@@ -216,11 +217,7 @@ const SnapshotVoteModalModal = ({
   return (
     <>
       {show && (
-        <Modal
-          onDismiss={onHide}
-          title={`Vote on Prop ${proposalId}`}
-          content={voteModalContent}
-        />
+        <Modal onDismiss={onHide} title={`Vote on Prop ${proposalId}`} content={voteModalContent} />
       )}
     </>
   );
