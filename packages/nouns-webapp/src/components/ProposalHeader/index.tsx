@@ -16,7 +16,7 @@ import { useEthers } from '@usedapp/core';
 import { buildEtherscanAddressLink } from '../../utils/etherscan';
 import { transactionLink } from '../ProposalContent';
 import ShortAddress from '../ShortAddress';
-import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal } from '../../wrappers/federation';
+import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal, useUserGnarsVotesAsOfBlock } from '../../wrappers/federation';
 
 interface ProposalHeaderProps {
   proposal: Proposal;
@@ -44,10 +44,13 @@ export const useHasVotedOnSnapshotProposal = (snapshotVoters: SnapshotVoters[] |
 
 const ProposalHeader: React.FC<ProposalHeaderProps> = props => {
   const { proposal, isActiveForVoting, isWalletConnected, submitButtonClickHandler , snapshotProposal, federationProposal, isNounsDAOProp, snapshotVoters} = props;
-console.log(`federationProposala: ${federationProposal}`);
+console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isActiveForVoting}`);
 
   const isMobile = isMobileScreen();
-  const availableVotes = useUserVotesAsOfBlock(federationProposal ? federationProposal?.startBlock : proposal?.createdBlock) ?? 1//0;
+
+  //TODO: TEMP change to gnars address (federationProposal?.startBlock ?? undefined)
+  const availableVotes = federationProposal ? useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined) : useUserVotesAsOfBlock(proposal?.createdBlock)
+  //useUserVotesAsOfBlock(federationProposal ? federationProposal?.startBlock : proposal?.createdBlock) ?? 1//0;
   const hasVoted = federationProposal ? useHasVotedOnFederationProposal(federationProposal?.id) : !snapshotProposal ? useHasVotedOnProposal(proposal?.id) : useHasVotedOnSnapshotProposal(snapshotVoters) 
   const proposalVote = federationProposal ? useFederationProposalVote(federationProposal?.id) : useProposalVote(proposal?.id);
   const proposalCreationTimestamp = federationProposal ? useBlockTimestamp(federationProposal?.startBlock) : !snapshotProposal ? useBlockTimestamp(proposal?.createdBlock) : useBlockTimestamp(Number(snapshotProposal?.snapshot))

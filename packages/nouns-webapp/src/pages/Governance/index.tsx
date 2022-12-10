@@ -108,7 +108,7 @@ const GovernancePage = ({
   }
 
   const nounCount = nounsInTreasury.accounts.length ? nounsInTreasury.accounts[0].tokenBalance : "0"
-
+  
   return (
     <Section fullWidth={false} className={classes.section}>
       <Col lg={10} className={classes.wrapper}>
@@ -238,10 +238,14 @@ const GovernancePage = ({
         <Proposals
           proposals={proposals}
           nounsDAOProposals={bigNounProposals}
-          snapshotProposals={snapshotProposalData.proposals.map((v: any, i: any) => ({
-            ...v,
-            proposalNo: i + 1,
-          }))}
+          snapshotProposals={
+            !snapshotProposalError && !snapshotProposalLoading && snapshotProposalData
+              ? snapshotProposalData.proposals.map((v: any, i: any) => ({
+                  ...v,
+                  proposalNo: i + 1,
+                }))
+              : undefined
+          }
           federationProposals={federationProposals.map((v: any, i: any) => ({
             ...v,
             proposalNo: i + 1,

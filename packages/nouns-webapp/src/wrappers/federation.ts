@@ -10,7 +10,7 @@ import {
 import { Contract } from '@ethersproject/contracts';
 import { utils, BigNumber as EthersBN } from 'ethers';
 import { useLogs } from '../hooks/useLogs';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import config, { CHAIN_ID } from '../config';
 import { useQuery } from '@apollo/client';
 import { federationProposalsQuery } from './subgraph';
@@ -384,9 +384,9 @@ export const useAllFederationProposals = (): FederationProposalData => {
 //* GOOD
 export const useFederationProposal = (id: string | number) => {
   const { data } = useAllFederationProposalsViaSubgraph();
-  console.log(`data=${JSON.stringify(data.filter(p => p.eID))}`);
+  // console.log(`data=${JSON.stringify(data.filter(p => p.eID))}`);
 
-  const firstPropID = data?.find(p => p.id === '1')?.eID ?? "179";
+  const firstPropID = data?.find(p => p.id === '1')?.eID ?? "166";
 
   return { firstFederationPropId: firstPropID, federationProposal: data?.find(p => p.eID === id.toString()) };
   // const { data } = useAllFederationProposalsViaChain();
@@ -417,4 +417,18 @@ export const useFederationExecuteProposal = () => {
     'execute',
   );
   return { executeProposal, executeFederationProposalState };
+};
+
+export const useUserGnarsVotesAsOfBlock = (block: number | undefined): number | undefined => {
+  const { account } = useEthers();
+
+  // Check for available votes
+  const [votes] =
+    useContractCall<[EthersBN]>({
+      abi,
+      address: "0x558bfff0d583416f7c4e380625c7865821b8e95c",
+      method: 'getPriorVotes',
+      args: [account, block],
+    }) || [];
+  return votes?.toNumber();
 };

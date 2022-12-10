@@ -58,6 +58,7 @@ import {
   useFederationProposal,
   useFederationProposalResult,
   useFederationPropose,
+  useUserGnarsVotesAsOfBlock,
 } from '../../wrappers/federation';
 import { getMetagovNounVotes } from '../../utils/getMetagovNounsVotes';
 import VoteModal from '../../components/VoteModal';
@@ -79,6 +80,7 @@ interface MetagovProp {
   abstainMetagovNounIds: string[];
 
   metagovPropEndDate: dayjs.Dayjs | undefined;
+  metagovPropExecutionWindowDate: dayjs.Dayjs | undefined;
   metagovPropStartDate: dayjs.Dayjs | undefined;
   propStatus: ProposalState;
   metagovForCountAmt: number;
@@ -316,7 +318,7 @@ const NounsVotePage = ({
     federationProposal && timestamp && currentBlock
       ? dayjs(timestamp).add(
           AVERAGE_BLOCK_TIME_IN_SECS *
-            (federationProposal.endBlock + federationPropExecutionWindow - currentBlock),
+          ((federationProposal.endBlock - federationPropExecutionWindow) - currentBlock),
           'seconds',
         )
       : undefined;
@@ -339,13 +341,14 @@ const NounsVotePage = ({
     federationProposal && federationTotalVotes
       ? (federationProposal.abstainCount * 100) / federationTotalVotes
       : 0;
-
+      
   // Only count available votes as of the proposal created block
   //TODO: (REVIEW) FEDERATION - if metagov is via federation useUserVotesAsOfBlock(federation startblock)
   const availableVotes = !isLilNounView
     ? useUserVotesAsOfBlock(proposal?.createdBlock ?? undefined)
     : isFederationProp
-    ? useUserVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
+    ? //TODO: TEMP change to gnars address useUserVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
+    useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
     : useUserVotesAsOfBlock(snapProp?.snapshot ?? undefined);
 
   const currentQuorum = useCurrentQuorum(
@@ -472,7 +475,7 @@ const NounsVotePage = ({
     }
 
     //propose metagov proposal
-    if (isAwaitingFederationPropCreation) {
+    if (isAwaitingFederationPropCreation && availableVotes) {
       return true;
     }
 
@@ -517,6 +520,7 @@ const NounsVotePage = ({
     (
       tx: TransactionStatus,
       successMessage?: string,
+      errorExplanation?: string,
       setPending?: (isPending: boolean) => void,
       getErrorMessage?: (error?: string) => string | undefined,
       onFinalState?: () => void,
@@ -552,6 +556,7 @@ const NounsVotePage = ({
           setModal({
             title: 'Error',
             message: getErrorMessage?.(tx?.errorMessage) || 'Please try again.',
+            explanation: errorExplanation || "",
             show: true,
           });
           setPending?.(false);
@@ -563,18 +568,18 @@ const NounsVotePage = ({
   );
 
   useEffect(
-    () => onTransactionStateChange(queueProposalState, 'Proposal Queued!', setQueuePending),
+    () => onTransactionStateChange(queueProposalState, 'Proposal Queued!', "Couldn't queue proposal", setQueuePending),
     [queueProposalState, onTransactionStateChange, setModal],
   );
 
   useEffect(
-    () => onTransactionStateChange(executeProposalState, 'Proposal Executed!', setExecutePending),
+    () => onTransactionStateChange(executeProposalState, 'Proposal Executed!', "Couldn't execute proposal", setExecutePending),
     [executeProposalState, onTransactionStateChange, setModal],
   );
 
   //TODO: (REVIEW) Federation prop creation txn (propose)
   useEffect(
-    () => onTransactionStateChange(proposeState, 'Proposal Created!', setCreateFederationPending),
+    () => onTransactionStateChange(proposeState, 'Vote Started!', "Couldn't start vote", setCreateFederationPending),
     [proposeState, onTransactionStateChange, setModal],
   );
 
@@ -584,6 +589,7 @@ const NounsVotePage = ({
       onTransactionStateChange(
         executeFederationProposalState,
         'Metagov Proposal Executed!',
+        "",
         setExecuteFederationPending,
       ),
     [executeFederationProposalState, onTransactionStateChange, setModal],
@@ -594,7 +600,7 @@ const NounsVotePage = ({
       if (!fetchedValues.metagovPropStartDate?.isBefore(now)) {
         return fetchedValues.metagovPropStartDate;
       }
-      return fetchedValues.metagovPropEndDate;
+      return fetchedValues.metagovPropExecutionWindowDate//metagovPropEndDate;
     }
 
     return undefined;
@@ -672,8 +678,8 @@ const NounsVotePage = ({
 
       return true;
     }
-
-    if (snapProp?.state == 'active' ){ //&& !federationProposal) {
+    
+    if (snapProp?.state == 'active' && !federationProposal) {
       return true;
     }
 
@@ -794,6 +800,7 @@ const NounsVotePage = ({
         againstMetagovNounIds: federationData ? getMetagovNounVotes(federationData, 0) : [],
         abstainMetagovNounIds: federationData ? getMetagovNounVotes(federationData, 2) : [],
         metagovPropEndDate: federationEndDate,
+        metagovPropExecutionWindowDate: federationPropExecutionWindowDate,
         metagovPropStartDate: federationStartDate,
         propStatus: propStatus,
         metagovForCountAmt: federationProposal?.forCount ?? 0,
@@ -862,6 +869,7 @@ const NounsVotePage = ({
         againstMetagovNounIds: snapVotes.filter(opt => opt.choice == 2).flatMap(a => a.nounIds),
         abstainMetagovNounIds: snapVotes.filter(opt => opt.choice == 3).flatMap(a => a.nounIds),
         metagovPropEndDate: dayjs.unix(snapProp.end),
+        metagovPropExecutionWindowDate: dayjs.unix(snapProp.end),
         metagovPropStartDate: dayjs.unix(snapProp.start),
         propStatus: propStatus,
         metagovForCountAmt: snapProp.scores[0],
@@ -878,6 +886,7 @@ const NounsVotePage = ({
       againstMetagovNounIds: [],
       abstainMetagovNounIds: [],
       metagovPropEndDate: undefined,
+      metagovPropExecutionWindowDate: undefined,
       metagovPropStartDate: undefined,
       propStatus: propStatus,
       metagovForCountAmt: 0,
@@ -894,7 +903,7 @@ const NounsVotePage = ({
   const metagovStartOrEndTimeCopy = () => {
     if (
       fetchedValues.metagovPropStartDate?.isBefore(now) &&
-      fetchedValues.metagovPropEndDate?.isAfter(now)
+      fetchedValues.metagovPropExecutionWindowDate?.isAfter(now)
     ) {
       return 'Ends';
     }
@@ -954,6 +963,7 @@ const NounsVotePage = ({
       </Col>
       <Col lg={10} className={clsx(classes.proposal, classes.wrapper)}>
         {/* //TODO: {REVIEW) FEDERATION - REFACTOR FOR EXECUTE AND PROPOSE */}
+
         {isAwaitingMetagovStateChange() && (
           <Row className={clsx(classes.section, classes.transitionStateButtonSection)}>
             <Col className="d-grid">
@@ -1145,6 +1155,7 @@ const NounsVotePage = ({
 
         <ProposalContent proposal={proposal} />
       </Col>
+      
     </Section>
   );
 };

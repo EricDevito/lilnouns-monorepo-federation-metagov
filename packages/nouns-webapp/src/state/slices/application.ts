@@ -5,6 +5,7 @@ export interface AlertModal {
   show: boolean;
   title?: string;
   message?: string;
+  explanation?: string;
   isMilestone?: boolean;
   isActionPrompt?: boolean;
   actionMessage?: string;

@@ -9,7 +9,8 @@ import { setAlertModal } from './state/slices/application';
 import classes from './App.module.css';
 import '../src/css/globals.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import AlertModal from './components/Modal';
+import AlertModal from './components/SolidColorBackgroundModal';
+// import AlertModal from './components/Modal';
 import NavBar from './components/NavBar';
 import NetworkAlert from './components/NetworkAlert';
 import Footer from './components/Footer';
@@ -70,41 +71,65 @@ function App() {
     dispatch(setActiveAccount(account));
   }, [account, dispatch, activeAccount]);
 
+  const voteModalContent = (
+    <>
+      <div className={classes.voteModalTitle}>
+        <a>{alertModal.title}</a>
+      </div>
+
+      <div className={classes.transactionStatus}>
+        <p>{alertModal.explanation}</p>
+
+        {alertModal.message?.includes("Please try again.") ? (
+           <div className={classes.voteFailureBody}>
+           <span className={classes.voteFailureErrorMessage}>{alertModal.message}</span>
+           </div>
+        ) : (
+          <div className={classes.voteSuccessBody}>
+            <span className={classes.voteSuccessBody}>{alertModal.message}</span>
+          </div>
+        )}
+       
+      </div>
+    </>
+  );
+
   return (
     <div className={`${classes.wrapper}`}>
       {Number(CHAIN_ID) !== chainId && <NetworkAlert />}
       {alertModal.show && (
         <>
           <AlertModal
-            title={alertModal.title}
             content={
               <>
-                <p>{alertModal.message}</p>
-
-                {alertModal.isActionPrompt && (
-                  <>
+             
+                {alertModal.isActionPrompt ? 
+                (
+                  <div className={classes.bidWrapper}>
+                   {voteModalContent}
                     {
-                      <Row>
-                        <Col>
+                       <div className={classes.nounButtonContents}>
                           <button
-                            className={classes.alertButton}
+                            className={classes.destructiveAlertButton}
                             onClick={() => dispatch(setAlertModal({ ...alertModal, show: false }))}
                           >
                             Cancel
                           </button>
-                        </Col>
-                        <Col>
+                          <div className={classes.divider} />
                           <button className={classes.alertButton} onClick={alertModal.action}>
                             {alertModal.actionMessage}
                           </button>
-                        </Col>
-                      </Row>
+                      </div>
                     }
-                  </>
+                  </div>
+                )
+                : (
+                  {voteModalContent}
                 )}
               </>
             }
             onDismiss={() => dispatch(setAlertModal({ ...alertModal, show: false }))}
+            show={true}
           />
         </>
       )}

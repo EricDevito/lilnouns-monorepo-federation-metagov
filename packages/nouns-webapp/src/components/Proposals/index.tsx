@@ -110,9 +110,10 @@ const getCountdownCopy = (
     if (
       federationProposal.status == FederationProposalState.ACTIVE &&
       federationPropStartDate?.isBefore(now) &&
-      federationEndDate?.isAfter(now)
+      federationEndDate?.isAfter(now) && 
+      federationPropExecutionWindowDate
     ) {
-      return `Lil Nouns Voting Ends ${federationEndDate.fromNow()}`;
+      return `Lil Nouns Voting Ends ${federationPropExecutionWindowDate.fromNow()}`;
     }
 
     //TODO: REFACTOR END BLOCK EXECUTIONWINDOW CONDITIONALS
@@ -368,7 +369,7 @@ const Proposals = ({
 }: {
   proposals: Proposal[];
   nounsDAOProposals: Proposal[];
-  snapshotProposals: SnapshotProposal[] | null;
+  snapshotProposals: SnapshotProposal[] | undefined;
   federationProposals: FederationProposal[] | null;
   isNounsDAOProp: boolean;
 }) => {
@@ -385,6 +386,8 @@ const Proposals = ({
   const hasNounBalance = (useNounTokenBalance(account || undefined) ?? 0) > 0;
   const userDelegatee = useUserDelegatee();
   const hasDelegatedVotes = account !== undefined && userDelegatee != account;
+
+const firstFederationProp = federationProposals?.at(0) || undefined
 
   const nullStateCopy = () => {
     if (account !== null) {
@@ -499,10 +502,7 @@ const Proposals = ({
 
                 const federationVoteObject = federationProposals?.find(spi => spi.eID == p.id);
 
-                const mm = federationProposals?.find(p => p.eID === "174")
-                // console.log(`mm: ${mm?.eID}. ${mm?.executed}. ${mm?.status}`);
-
-                console.log(`mm: ${mm?.eID}. ${mm?.status}`);
+               
 
 
                 let propStatus = p.status;
@@ -552,11 +552,6 @@ const Proposals = ({
                   //TODO: fetch federation prop result and states
 
                   const now = dayjs();
-
-                  if (federationVoteObject.eID === '174') {
-                    //TODO why does it default to expired? probs set some execution window rule incorrectly in here or in federation wrapper
-                    console.log(`federationVoteObject.status: ${federationVoteObject.status}`);
-                  }
 
                   switch (federationVoteObject.status) {
                     case FederationProposalState.ACTIVE:
@@ -639,7 +634,13 @@ const Proposals = ({
                     propStatus = p.status;
                   }
                 } else if(isFederationProp && !federationVoteObject) {
-                  propStatus =ProposalState.METAGOV_AWAITING_INITIATION
+                  if (firstFederationProp && p){
+                    if(parseInt(firstFederationProp?.id ?? "0") >= parseInt(p?.id ?? "0")){
+                    propStatus = ProposalState.METAGOV_AWAITING_INITIATION
+                    }
+                  }
+                  propStatus = p.status;
+                  
                 }
 
                 const isPropInStateToHaveCountDown =
