@@ -16,7 +16,8 @@ import { useEthers } from '@usedapp/core';
 import { buildEtherscanAddressLink } from '../../utils/etherscan';
 import { transactionLink } from '../ProposalContent';
 import ShortAddress from '../ShortAddress';
-import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal, useUserGnarsVotesAsOfBlock } from '../../wrappers/federation';
+import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal } from '../../wrappers/federation';
+import { useUserGnarsVotesAsOfBlock } from '../../wrappers/gnars';
 
 interface ProposalHeaderProps {
   proposal: Proposal;
@@ -49,7 +50,7 @@ console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isA
   const isMobile = isMobileScreen();
 
   //TODO: TEMP change to gnars address (federationProposal?.startBlock ?? undefined)
-  const availableVotes = federationProposal ? useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined) : useUserVotesAsOfBlock(proposal?.createdBlock)
+  const availableVotes = federationProposal ? useUserGnarsVotesAsOfBlock(16154249) : useUserVotesAsOfBlock(proposal?.createdBlock)
   //useUserVotesAsOfBlock(federationProposal ? federationProposal?.startBlock : proposal?.createdBlock) ?? 1//0;
   const hasVoted = federationProposal ? useHasVotedOnFederationProposal(federationProposal?.id) : !snapshotProposal ? useHasVotedOnProposal(proposal?.id) : useHasVotedOnSnapshotProposal(snapshotVoters) 
   const proposalVote = federationProposal ? useFederationProposalVote(federationProposal?.id) : useProposalVote(proposal?.id);

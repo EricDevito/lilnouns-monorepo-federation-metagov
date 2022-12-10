@@ -57,11 +57,11 @@ import {
   useFederationExecutionWindow,
   useFederationProposal,
   useFederationProposalResult,
-  useFederationPropose,
-  useUserGnarsVotesAsOfBlock,
+  useFederationPropose
 } from '../../wrappers/federation';
 import { getMetagovNounVotes } from '../../utils/getMetagovNounsVotes';
 import VoteModal from '../../components/VoteModal';
+import { useUserGnarsVotesAsOfBlock } from '../../wrappers/gnars';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);

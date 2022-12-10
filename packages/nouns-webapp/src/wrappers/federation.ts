@@ -1,4 +1,5 @@
 import FederationABI from '../abi/federation/DelegateMultiToken.json';
+import GnarsABI from '../abi/federation/gnars.json';
 import {
   ChainId,
   useBlockNumber,
@@ -14,7 +15,6 @@ import { useEffect, useMemo, useState } from 'react';
 import config, { CHAIN_ID } from '../config';
 import { useQuery } from '@apollo/client';
 import { federationProposalsQuery } from './subgraph';
-import { NounsDAOABI, NounsDaoLogicV1Factory } from '@lilnounsdao/sdk';
 
 export const federationGenesisBlock = 12600000;
 //TODO: change to lils address
@@ -417,18 +417,4 @@ export const useFederationExecuteProposal = () => {
     'execute',
   );
   return { executeProposal, executeFederationProposalState };
-};
-
-export const useUserGnarsVotesAsOfBlock = (block: number | undefined): number | undefined => {
-  const { account } = useEthers();
-
-  // Check for available votes
-  const [votes] =
-    useContractCall<[EthersBN]>({
-      abi,
-      address: "0x558bfff0d583416f7c4e380625c7865821b8e95c",
-      method: 'getPriorVotes',
-      args: [account, block],
-    }) || [];
-  return votes?.toNumber();
 };
