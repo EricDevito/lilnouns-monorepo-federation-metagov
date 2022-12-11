@@ -82,6 +82,7 @@ interface MetagovProp {
   metagovPropEndDate: dayjs.Dayjs | undefined;
   metagovPropExecutionWindowDate: dayjs.Dayjs | undefined;
   metagovPropStartDate: dayjs.Dayjs | undefined;
+  metagovQuroum: number;
   propStatus: ProposalState;
   metagovForCountAmt: number;
   metagovAgainstCountAmt: number;
@@ -597,10 +598,21 @@ const NounsVotePage = ({
 
   const metagovStartOrEndTimeTime = () => {
     if (fetchedValues.metagovPropStartDate !== undefined) {
-      if (!fetchedValues.metagovPropStartDate?.isBefore(now)) {
+      if (fetchedValues.metagovPropStartDate?.isAfter(now)) {
         return fetchedValues.metagovPropStartDate;
       }
-      return fetchedValues.metagovPropExecutionWindowDate//metagovPropEndDate;
+      // return fetchedValues.metagovPropExecutionWindowDate//metagovPropEndDate;
+
+      if (fetchedValues.metagovPropEndDate?.isBefore(now)) {
+        return fetchedValues.metagovPropEndDate;
+      } else if (
+        federationProposal &&
+        federationProposal?.forCount < federationProposal.quorumVotes
+      ) {
+        return fetchedValues.metagovPropEndDate;
+      } else {
+        return fetchedValues.metagovPropExecutionWindowDate;
+      }
     }
 
     return undefined;
@@ -750,7 +762,13 @@ const NounsVotePage = ({
               now?.isAfter(federationPropExecutionWindowDate) &&
               now?.isBefore(federationEndDate)
             ) {
-              propStatus = ProposalState.METAGOV_AWAITING_EXECUTION;
+
+              if (federationProposal.forCount < federationProposal.quorumVotes) {
+                propStatus = ProposalState.METAGOV_ACTIVE;
+              } else {
+                propStatus = ProposalState.METAGOV_AWAITING_EXECUTION;
+              }
+              
             }
           } else {
             propStatus = proposal.status;
@@ -803,6 +821,7 @@ const NounsVotePage = ({
         metagovPropExecutionWindowDate: federationPropExecutionWindowDate,
         metagovPropStartDate: federationStartDate,
         propStatus: propStatus,
+        metagovQuroum: federationProposal?.quorumVotes ?? 0,
         metagovForCountAmt: federationProposal?.forCount ?? 0,
         metagovAgainstCountAmt: federationProposal?.againstCount ?? 0,
         metagovAbstainCountAmt: federationProposal?.abstainCount ?? 0,
@@ -872,6 +891,7 @@ const NounsVotePage = ({
         metagovPropExecutionWindowDate: dayjs.unix(snapProp.end),
         metagovPropStartDate: dayjs.unix(snapProp.start),
         propStatus: propStatus,
+        metagovQuroum: 0,
         metagovForCountAmt: snapProp.scores[0],
         metagovAgainstCountAmt: snapProp.scores[1],
         metagovAbstainCountAmt: snapProp.scores[2],
@@ -889,6 +909,7 @@ const NounsVotePage = ({
       metagovPropExecutionWindowDate: undefined,
       metagovPropStartDate: undefined,
       propStatus: propStatus,
+      metagovQuroum: 0,
       metagovForCountAmt: 0,
       metagovAgainstCountAmt: 0,
       metagovAbstainCountAmt: 0,
@@ -903,13 +924,26 @@ const NounsVotePage = ({
   const metagovStartOrEndTimeCopy = () => {
     if (
       fetchedValues.metagovPropStartDate?.isBefore(now) &&
-      fetchedValues.metagovPropExecutionWindowDate?.isAfter(now)
+      fetchedValues.metagovPropExecutionWindowDate?.isAfter(now) &&
+      fetchedValues.metagovPropEndDate?.isAfter(now)
     ) {
       return 'Ends';
-    }
-    if (fetchedValues.metagovPropEndDate?.isBefore(now)) {
+    } else if (
+      fetchedValues.metagovPropEndDate?.isAfter(now) &&
+      fetchedValues.metagovPropExecutionWindowDate?.isBefore(now)
+      ) {
+      //if quroum is not met, voting period is pushed to end block
+      if (fetchedValues && fetchedValues.metagovForCountAmt < fetchedValues.metagovQuroum) {
+        return 'Ends';
+      } else {
+        return 'Ended';
+      }
+    } else if (fetchedValues.metagovPropEndDate?.isBefore(now)) {
       return 'Ended';
     }
+
+   
+
 
     return 'Starts';
   };
@@ -1091,7 +1125,7 @@ const NounsVotePage = ({
                   >
                     <span>{isLilNounView ? 'Quorum' : isV2Prop ? 'Current Quorum' : 'Quorum'}</span>
                     {isLilNounView ? (
-                      <h3>N/A</h3>
+                      <h3>{fetchedValues.metagovQuroum ?? "N/A"}</h3>
                     ) : (
                       <h3>
                         {isV2Prop ? currentQuorum ?? 0 : proposal.quorumVotes} votes

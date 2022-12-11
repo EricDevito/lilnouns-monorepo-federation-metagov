@@ -1,5 +1,4 @@
 import FederationABI from '../abi/federation/DelegateMultiToken.json';
-import GnarsABI from '../abi/federation/gnars.json';
 import {
   ChainId,
   useBlockNumber,
@@ -129,17 +128,15 @@ const proposalCreatedFilter = (federationContract: Contract) => {
   };
 };
 //* GOOD
-export const useCurrentQuorum = (proposalId: number, skip: boolean): number | undefined => {
-  const request = () => {
-    if (skip) return false;
-    return {
+export const useFederationCurrentQuorum = (): number | undefined => {
+  const [quorumBPS] =
+    useContractCall<[EthersBN]>({
       abi,
-      method: 'proposals',
-      args: [proposalId],
-    };
-  };
-  const [quorumVotes] = useContractCall<[EthersBN]>(request()) || [];
-  return quorumVotes?.toNumber();
+      address: federationAddress,
+      method: 'quorumBPS',
+      args: [],
+    }) || [];
+  return quorumBPS?.toNumber();
 };
 //* GOOD - same as below
 export const useHasVotedOnFederationProposal = (proposalId: string | undefined): boolean => {

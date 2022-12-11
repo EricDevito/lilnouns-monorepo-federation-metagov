@@ -17,7 +17,11 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import advanced from 'dayjs/plugin/advancedFormat';
 import { AVERAGE_BLOCK_TIME_IN_SECS } from '../../utils/constants';
-import { FederationProposal, FederationProposalState } from '../../wrappers/federation';
+import {
+  FederationProposal,
+  FederationProposalState,
+  useFederationCurrentQuorum,
+} from '../../wrappers/federation';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -29,7 +33,7 @@ const getCountdownCopy = (
   currentBlock: number,
   propState?: ProposalState,
   snapshotProp?: SnapshotProposal,
-  federationProposal?: FederationProposal
+  federationProposal?: FederationProposal,
 ) => {
   const timestamp = Date.now();
   const startDate =
@@ -53,7 +57,8 @@ const getCountdownCopy = (
   const now = dayjs();
 
   if (
-    snapshotProp && !federationProposal &&
+    snapshotProp &&
+    !federationProposal &&
     (propState == ProposalState.METAGOV_ACTIVE || propState == ProposalState.METAGOV_CLOSED)
   ) {
     const snapshotPropEndDate = dayjs.unix(snapshotProp.end);
@@ -100,7 +105,7 @@ const getCountdownCopy = (
       federationProposal && timestamp && currentBlock
         ? dayjs(timestamp).add(
             AVERAGE_BLOCK_TIME_IN_SECS *
-              ((federationProposal.endBlock - federationPropExecutionWindow) - currentBlock),
+              (federationProposal.endBlock - federationPropExecutionWindow - currentBlock),
             'seconds',
           )
         : undefined;
@@ -110,9 +115,14 @@ const getCountdownCopy = (
     if (
       federationProposal.status == FederationProposalState.ACTIVE &&
       federationPropStartDate?.isBefore(now) &&
-      federationEndDate?.isAfter(now) && 
+      federationEndDate?.isAfter(now) &&
       federationPropExecutionWindowDate
     ) {
+      //Federation voting lasts up untill endblock if quroum is not met
+      if (federationProposal.quorumVotes > federationProposal.forCount && federationPropExecutionWindowDate.isBefore(now)) {
+        return `Lil Nouns Voting Ends ${federationEndDate.fromNow()}`;
+      }
+
       return `Lil Nouns Voting Ends ${federationPropExecutionWindowDate.fromNow()}`;
     }
 
@@ -136,8 +146,9 @@ const getCountdownCopy = (
     if (
       // federationPropExecutionWindowDate?.isBefore(now) &&
       // now?.isAfter(federationPropExecutionWindowDate) &&
-      federationProposal.executed || now?.isAfter(federationEndDate) &&
-      federationProposal.status == FederationProposalState.EXPIRED ||
+      federationProposal.executed ||
+      (now?.isAfter(federationEndDate) &&
+        federationProposal.status == FederationProposalState.EXPIRED) ||
       federationProposal.status == FederationProposalState.VETOED ||
       federationProposal.status == FederationProposalState.EXECUTED ||
       federationProposal.status == FederationProposalState.UNDETERMINED
@@ -374,6 +385,7 @@ const Proposals = ({
   isNounsDAOProp: boolean;
 }) => {
   const history = useHistory();
+  const timestamp = Date.now();
 
   const { account } = useEthers();
   const connectedAccountNounVotes = useUserVotes() || 0;
@@ -387,7 +399,7 @@ const Proposals = ({
   const userDelegatee = useUserDelegatee();
   const hasDelegatedVotes = account !== undefined && userDelegatee != account;
 
-const firstFederationProp = federationProposals?.at(0) || undefined
+  const firstFederationProp = federationProposals?.at(0) || undefined;
 
   const nullStateCopy = () => {
     if (account !== null) {
@@ -495,15 +507,12 @@ const firstFederationProp = federationProposals?.at(0) || undefined
               .reverse()
               .map((p, i) => {
                 //TODO: fetch first federation prop id
-                const isFederationProp = parseInt(p.id ?? "0") ?? 0 >= 166
+                const isFederationProp = parseInt(p.id ?? '0') ?? 0 >= 166;
                 const snapshotVoteObject = snapshotProposals.find(spi =>
                   spi.body.includes(p.transactionHash),
                 );
 
                 const federationVoteObject = federationProposals?.find(spi => spi.eID == p.id);
-
-               
-
 
                 let propStatus = p.status;
 
@@ -547,7 +556,6 @@ const firstFederationProp = federationProposals?.at(0) || undefined
                       propStatus = p.status;
                       break;
                   }
-
                 } else if (isFederationProp && federationVoteObject) {
                   //TODO: fetch federation prop result and states
 
@@ -563,33 +571,65 @@ const firstFederationProp = federationProposals?.at(0) || undefined
                       p.snapshotEnd = federationVoteObject.endBlock; //snapshotVoteObject.end;
 
                       if (p.status == ProposalState.PENDING || p.status == ProposalState.ACTIVE) {
-                        const federationPropEndDate = dayjs.unix(federationVoteObject.endBlock);
-                        const federationPropStartDate = dayjs.unix(federationVoteObject.startBlock);
+                        // const federationPropEndDate = dayjs.unix(federationVoteObject.endBlock);
+                        // const federationPropStartDate = dayjs.unix(federationVoteObject.startBlock);
 
-                        const federationPropExecutionWindowDate = dayjs.unix(
-                          federationVoteObject.executionWindow ?? 2500,
-                        );
+                        const federationPropStartDate =
+                          federationVoteObject && timestamp && currentBlock
+                            ? dayjs(timestamp).add(
+                                AVERAGE_BLOCK_TIME_IN_SECS *
+                                  (federationVoteObject.startBlock - currentBlock),
+                                'seconds',
+                              )
+                            : undefined;
 
-                        //TODO: if within voting window - voting
+                        const federationEndDate =
+                          federationVoteObject && timestamp && currentBlock
+                            ? dayjs(timestamp).add(
+                                AVERAGE_BLOCK_TIME_IN_SECS *
+                                  (federationVoteObject.endBlock - currentBlock),
+                                'seconds',
+                              )
+                            : undefined;
+
+                        const federationPropExecutionWindow =
+                          federationVoteObject?.executionWindow ?? 2500;
+
+                        const federationPropExecutionWindowDate =
+                          federationVoteObject && timestamp && currentBlock
+                            ? dayjs(timestamp).add(
+                                AVERAGE_BLOCK_TIME_IN_SECS *
+                                  (federationVoteObject.endBlock -
+                                    federationPropExecutionWindow -
+                                    currentBlock),
+                                'seconds',
+                              )
+                            : undefined;
+
+                        //if within voting period - active
                         if (
                           !federationVoteObject.executed &&
-                          federationVoteObject.status == FederationProposalState.ACTIVE &&
-                          federationPropEndDate?.isBefore(now)
+                          federationEndDate?.isAfter(now) &&
+                          federationPropExecutionWindowDate?.isAfter(now)
                         ) {
                           propStatus = ProposalState.METAGOV_ACTIVE;
                         }
-
-                        //TODO: if within voting window but past endblock - waiting to be casted in
+                        //if not within voitng period
                         else if (
                           !federationVoteObject.executed &&
-                          federationVoteObject.status == FederationProposalState.ACTIVE &&
-                          federationPropExecutionWindowDate?.isBefore(now) &&
-                          federationPropEndDate?.isAfter(now)
+                          federationEndDate?.isAfter(now) &&
+                          federationPropExecutionWindowDate?.isBefore(now)
+                          
                         ) {
-                          propStatus = ProposalState.METAGOV_ACTIVE;
-                        } else {
-                          propStatus = ProposalState.VETOED;
+                          //if quroum is not met, voting period is pushed to end block
+                          if (federationVoteObject.forCount < federationVoteObject.quorumVotes) {
+                            propStatus = ProposalState.METAGOV_ACTIVE;
+                          } else {
+                            propStatus = ProposalState.METAGOV_AWAITING_EXECUTION;
+                          }
                         }
+
+
                       } else {
                         propStatus = p.status;
                       }
@@ -633,14 +673,13 @@ const firstFederationProp = federationProposals?.at(0) || undefined
                   } else {
                     propStatus = p.status;
                   }
-                } else if(isFederationProp && !federationVoteObject) {
-                  if (firstFederationProp && p){
-                    if(parseInt(firstFederationProp?.id ?? "0") >= parseInt(p?.id ?? "0")){
-                    propStatus = ProposalState.METAGOV_AWAITING_INITIATION
+                } else if (isFederationProp && !federationVoteObject) {
+                  if (firstFederationProp && p) {
+                    if (parseInt(firstFederationProp?.id ?? '0') >= parseInt(p?.id ?? '0')) {
+                      propStatus = ProposalState.METAGOV_AWAITING_INITIATION;
                     }
                   }
                   propStatus = p.status;
-                  
                 }
 
                 const isPropInStateToHaveCountDown =
@@ -663,7 +702,13 @@ const firstFederationProp = federationProposals?.at(0) || undefined
                           <ClockIcon height={16} width={16} />
                         </span>{' '}
                         <span className={classes.countdownPillText}>
-                          {getCountdownCopy(p, currentBlock || 0, propStatus, snapshotVoteObject, federationVoteObject)}
+                          {getCountdownCopy(
+                            p,
+                            currentBlock || 0,
+                            propStatus,
+                            snapshotVoteObject,
+                            federationVoteObject,
+                          )}
                         </span>
                       </div>
                     </div>
