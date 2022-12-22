@@ -162,6 +162,7 @@ const VoteCard: React.FC<VoteCardProps> = props => {
             <Row className={classes.nounProfilePics}>
               {delegateView ? (
                 <DelegateGroupedNounImageVoteTable
+                  isNounsDAOProp={isNounsDAOProp}
                   filteredDelegateGroupedVoteData={filteredDelegateGroupedVoteData}
                   propId={parseInt(proposal.id || '0')}
                   proposalCreationBlock={proposal.createdBlock}

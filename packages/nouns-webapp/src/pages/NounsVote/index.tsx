@@ -57,11 +57,12 @@ import {
   useFederationExecutionWindow,
   useFederationProposal,
   useFederationProposalResult,
-  useFederationPropose
+  useFederationPropose,
 } from '../../wrappers/federation';
 import { getMetagovNounVotes } from '../../utils/getMetagovNounsVotes';
 import VoteModal from '../../components/VoteModal';
 import { useUserGnarsVotesAsOfBlock } from '../../wrappers/gnars';
+import { isMobileScreen } from '../../utils/isMobile';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -181,7 +182,7 @@ const NounsVotePage = ({
 
   //* FEDERATION
   // const firstFederationPropId = useFederationProposal("0")?.eID ?? "166" // ?? 166//166; //TODO: fetch eID of proposal 0 from contract/subgraph
-  const { firstFederationPropId, federationProposal }  = useFederationProposal(id);
+  const { firstFederationPropId, federationProposal } = useFederationProposal(id);
   const isFederationProp = parseInt(id) > parseInt(firstFederationPropId);
   // console.log(`SSA federationProposal: ${federationProposal?.eID ?? 'no'}`);
 
@@ -319,7 +320,7 @@ const NounsVotePage = ({
     federationProposal && timestamp && currentBlock
       ? dayjs(timestamp).add(
           AVERAGE_BLOCK_TIME_IN_SECS *
-          ((federationProposal.endBlock - federationPropExecutionWindow) - currentBlock),
+            (federationProposal.endBlock - federationPropExecutionWindow - currentBlock),
           'seconds',
         )
       : undefined;
@@ -342,14 +343,14 @@ const NounsVotePage = ({
     federationProposal && federationTotalVotes
       ? (federationProposal.abstainCount * 100) / federationTotalVotes
       : 0;
-      
+
   // Only count available votes as of the proposal created block
   //TODO: (REVIEW) FEDERATION - if metagov is via federation useUserVotesAsOfBlock(federation startblock)
   const availableVotes = !isLilNounView
     ? useUserVotesAsOfBlock(proposal?.createdBlock ?? undefined)
     : isFederationProp
     ? //TODO: TEMP change to gnars address useUserVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
-    useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
+      useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
     : useUserVotesAsOfBlock(snapProp?.snapshot ?? undefined);
 
   const currentQuorum = useCurrentQuorum(
@@ -414,7 +415,6 @@ const NounsVotePage = ({
     if (federationProposal?.status !== FederationProposalState.EXPIRED) return;
 
     console.log(`execWindow: ${execWindow}`);
-    
 
     if (currentBlock && execWindow && federationProposal) {
       if (
@@ -505,7 +505,7 @@ const NounsVotePage = ({
       return async () => {
         if (proposal?.id) {
           console.log(`FF: ${proposal?.id}`);
-           return await propose("0x6f3e6272a167e8accb32072d08e0957f9c79223d", proposal?.id)
+          return await propose('0x6f3e6272a167e8accb32072d08e0957f9c79223d', proposal?.id);
         }
       };
     }
@@ -527,7 +527,7 @@ const NounsVotePage = ({
       onFinalState?: () => void,
     ) => {
       console.log(`proposeState: ${JSON.stringify(proposeState)}. ${tx?.errorMessage}`);
-      
+
       switch (tx.status) {
         case 'None':
           setPending?.(false);
@@ -557,7 +557,7 @@ const NounsVotePage = ({
           setModal({
             title: 'Error',
             message: getErrorMessage?.(tx?.errorMessage) || 'Please try again.',
-            explanation: errorExplanation || "",
+            explanation: errorExplanation || '',
             show: true,
           });
           setPending?.(false);
@@ -569,18 +569,36 @@ const NounsVotePage = ({
   );
 
   useEffect(
-    () => onTransactionStateChange(queueProposalState, 'Proposal Queued!', "Couldn't queue proposal", setQueuePending),
+    () =>
+      onTransactionStateChange(
+        queueProposalState,
+        'Proposal Queued!',
+        "Couldn't queue proposal",
+        setQueuePending,
+      ),
     [queueProposalState, onTransactionStateChange, setModal],
   );
 
   useEffect(
-    () => onTransactionStateChange(executeProposalState, 'Proposal Executed!', "Couldn't execute proposal", setExecutePending),
+    () =>
+      onTransactionStateChange(
+        executeProposalState,
+        'Proposal Executed!',
+        "Couldn't execute proposal",
+        setExecutePending,
+      ),
     [executeProposalState, onTransactionStateChange, setModal],
   );
 
   //TODO: (REVIEW) Federation prop creation txn (propose)
   useEffect(
-    () => onTransactionStateChange(proposeState, 'Vote Started!', "Couldn't start vote", setCreateFederationPending),
+    () =>
+      onTransactionStateChange(
+        proposeState,
+        'Vote Started!',
+        "Couldn't start vote",
+        setCreateFederationPending,
+      ),
     [proposeState, onTransactionStateChange, setModal],
   );
 
@@ -590,7 +608,7 @@ const NounsVotePage = ({
       onTransactionStateChange(
         executeFederationProposalState,
         'Metagov Proposal Executed!',
-        "",
+        '',
         setExecuteFederationPending,
       ),
     [executeFederationProposalState, onTransactionStateChange, setModal],
@@ -690,7 +708,7 @@ const NounsVotePage = ({
 
       return true;
     }
-    
+
     if (snapProp?.state == 'active' && !federationProposal) {
       return true;
     }
@@ -699,7 +717,6 @@ const NounsVotePage = ({
   })();
 
   // const isActiveForVoting = !snapProp ? false : snapProp.state == 'active' ? true : false;
-
 
   //DONE: (REVIEW) Change to prepareMetagov() and if check snapshot/federation
   const prepareMetagov = (): MetagovProp => {
@@ -758,17 +775,15 @@ const NounsVotePage = ({
 
             //TODO: check is not within voting window but within execution window
             //DONE
-             if (
+            if (
               now?.isAfter(federationPropExecutionWindowDate) &&
               now?.isBefore(federationEndDate)
             ) {
-
               if (federationProposal.forCount < federationProposal.quorumVotes) {
                 propStatus = ProposalState.METAGOV_ACTIVE;
               } else {
                 propStatus = ProposalState.METAGOV_AWAITING_EXECUTION;
               }
-              
             }
           } else {
             propStatus = proposal.status;
@@ -931,7 +946,7 @@ const NounsVotePage = ({
     } else if (
       fetchedValues.metagovPropEndDate?.isAfter(now) &&
       fetchedValues.metagovPropExecutionWindowDate?.isBefore(now)
-      ) {
+    ) {
       //if quroum is not met, voting period is pushed to end block
       if (fetchedValues && fetchedValues.metagovForCountAmt < fetchedValues.metagovQuroum) {
         return 'Ends';
@@ -942,15 +957,14 @@ const NounsVotePage = ({
       return 'Ended';
     }
 
-   
-
-
     return 'Starts';
   };
 
   proposal.status = fetchedValues.propStatus;
 
   //TODO: fix wallet disconnect white screen (UI related below - comment out and see)
+  const isMobile = isMobileScreen();
+
   return (
     <Section fullWidth={false} className={classes.votePage}>
       {showDynamicQuorumInfoModal && (
@@ -1038,17 +1052,39 @@ const NounsVotePage = ({
 
         <p
           onClick={() => {
-            if (isLilNounView) {
-              setIsLilNounView(false);
+            //TODO: implement delegate view
+            if (isDelegateView) {
+              setIsDelegateView(false);
+              if (snapProp) {
+                setIsLilNounView(true);
+              }
             }
 
-            if (!isLilNounView) {
-              setIsLilNounView(true);
+            if (!isDelegateView && !isLilNounView) {
+              !isMobile ? setIsDelegateView(true) : setIsLilNounView(true);
+            }
+
+            if (isLilNounView) {
+              setIsLilNounView(false);
             }
           }}
           className={classes.toggleVoteView}
         >
-          {isLilNounView ? 'Switch to Noun view' : 'Switch to Lil Noun view'}
+          {!snapProp
+            ? isDelegateView
+              ? 'Switch to Noun view'
+              : 'Switch to Noun delegate view'
+            : !isMobile
+            ? isDelegateView
+              ? 'Switch to Lil Noun view'
+              : isLilNounView
+              ? 'Switch to Noun view'
+              : 'Switch to Noun delegate view'
+            : isLilNounView
+            ? 'Switch to Noun view'
+            : 'Switch to Lil Noun view'}
+
+          {/* {isLilNounView ? 'Switch to Noun view' : 'Switch to Lil Noun view'} */}
         </p>
 
         <Row>
@@ -1125,7 +1161,7 @@ const NounsVotePage = ({
                   >
                     <span>{isLilNounView ? 'Quorum' : isV2Prop ? 'Current Quorum' : 'Quorum'}</span>
                     {isLilNounView ? (
-                      <h3>{fetchedValues.metagovQuroum ?? "N/A"}</h3>
+                      <h3>{fetchedValues.metagovQuroum ?? 'N/A'}</h3>
                     ) : (
                       <h3>
                         {isV2Prop ? currentQuorum ?? 0 : proposal.quorumVotes} votes
@@ -1189,7 +1225,6 @@ const NounsVotePage = ({
 
         <ProposalContent proposal={proposal} />
       </Col>
-      
     </Section>
   );
 };
