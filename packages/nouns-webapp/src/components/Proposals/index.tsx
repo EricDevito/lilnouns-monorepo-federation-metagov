@@ -22,7 +22,6 @@ import {
   FederationProposalState,
   useFederationCurrentQuorum,
 } from '../../wrappers/federation';
-import DropdownProposalFilter from '../DropdownProposalFilter';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
