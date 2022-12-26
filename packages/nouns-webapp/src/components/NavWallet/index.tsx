@@ -19,6 +19,7 @@ import { isMobileScreen } from '../../utils/isMobile';
 import { usePickByState } from '../../utils/colorResponsiveUIUtils';
 import WalletConnectButton from './WalletConnectButton';
 import { useAuth } from '../../hooks/useAuth';
+import { useReverseENSLookUp } from '../../utils/ensLookup';
 
 interface NavWalletProps {
   address: string;
@@ -49,7 +50,7 @@ const NavWallet: React.FC<NavWalletProps> = props => {
   const { logout } = useAuth();
   const activeAccount = useAppSelector(state => state.account.activeAccount);
   //TODO: Add reverse lookup after stable rpc plan
-  // const ens = useReverseENSLookUp(address);
+  const ens = useReverseENSLookUp(address);
   const shortAddress = useShortAddress(address);
 
   const setModalStateHandler = (state: boolean) => {
@@ -129,7 +130,7 @@ const NavWallet: React.FC<NavWalletProps> = props => {
             <Davatar size={21} address={address} provider={provider} />
           </div>
           {/* <div className={classes.address}>{ens ? ens : shortAddress}</div> */}
-          <div className={classes.address}>{shortAddress}</div>
+          <div className={classes.address}>{ens ? ens : shortAddress}</div>
           <div className={buttonUp ? classes.arrowUp : classes.arrowDown}>
             <FontAwesomeIcon icon={buttonUp ? faSortUp : faSortDown} />{' '}
           </div>

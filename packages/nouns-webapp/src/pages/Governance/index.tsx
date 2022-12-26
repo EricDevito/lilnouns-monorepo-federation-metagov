@@ -90,7 +90,7 @@ const GovernancePage = ({
   );
 
   const federationLink = (
-    <Link text="Federation" url="https://" leavesPage={true} />
+    <Link text="Federation" url="https://federation.wtf" leavesPage={true} />
   )
 
   if (
@@ -158,8 +158,8 @@ const GovernancePage = ({
               <>
                 Lil Nouns use Nouns collectivley purchased by the DAO to govern in{' '}
                 <span className={classes.boldText}>{nounsDaoLink}</span>. Lil Nouners can use their
-                lil nouns to vote on Nouns DAO proposals. Voting is free and is conducted via{' '}
-                <span className={classes.boldText}>{snapshotLink}</span>. A minimum of{' '}
+                lil nouns to vote on Nouns DAO proposals. Voting is onchain and is conducted via{' '}
+                <span className={classes.boldText}>{federationLink}</span>. A minimum of{' '}
                 <span className={classes.boldText}>{'1 Lil Noun'}</span> is required to vote.
               </>
             )}

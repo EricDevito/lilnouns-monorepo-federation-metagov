@@ -16,7 +16,11 @@ import { useEthers } from '@usedapp/core';
 import { buildEtherscanAddressLink } from '../../utils/etherscan';
 import { transactionLink } from '../ProposalContent';
 import ShortAddress from '../ShortAddress';
-import { FederationProposal, useFederationProposalVote, useHasVotedOnFederationProposal } from '../../wrappers/federation';
+import {
+  FederationProposal,
+  useFederationProposalVote,
+  useHasVotedOnFederationProposal,
+} from '../../wrappers/federation';
 import { useUserGnarsVotesAsOfBlock } from '../../wrappers/gnars';
 
 interface ProposalHeaderProps {
@@ -31,30 +35,47 @@ interface ProposalHeaderProps {
   submitButtonClickHandler: () => void;
 }
 
-export const useHasVotedOnSnapshotProposal = (snapshotVoters: SnapshotVoters[] | undefined): boolean => {
-  if(!snapshotVoters) return false;
+export const useHasVotedOnSnapshotProposal = (
+  snapshotVoters: SnapshotVoters[] | undefined,
+): boolean => {
+  if (!snapshotVoters) return false;
   const { account } = useEthers();
-  return snapshotVoters.flatMap(a => a.voter).includes(account?.toLowerCase() ?? "") ? true : false
+  return snapshotVoters.flatMap(a => a.voter).includes(account?.toLowerCase() ?? '') ? true : false;
 };
 
-// export const useHasVotedOnFederationProposal = (snapshotVoters: SnapshotVoters[] | undefined): boolean => {
-//   if(!snapshotVoters) return false;
-//   const { account } = useEthers();
-//   return snapshotVoters.flatMap(a => a.voter).includes(account?.toLowerCase() ?? "") ? true : false
-// };
-
 const ProposalHeader: React.FC<ProposalHeaderProps> = props => {
-  const { proposal, isActiveForVoting, isWalletConnected, submitButtonClickHandler , snapshotProposal, federationProposal, isNounsDAOProp, snapshotVoters} = props;
-console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isActiveForVoting}`);
+  const {
+    proposal,
+    isActiveForVoting,
+    isWalletConnected,
+    submitButtonClickHandler,
+    snapshotProposal,
+    federationProposal,
+    isNounsDAOProp,
+    snapshotVoters,
+  } = props;
+  console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isActiveForVoting}`);
 
   const isMobile = isMobileScreen();
 
   //TODO: TEMP change to gnars address (federationProposal?.startBlock ?? undefined)
-  const availableVotes = federationProposal ? useUserGnarsVotesAsOfBlock(16154249) : useUserVotesAsOfBlock(proposal?.createdBlock)
+  const availableVotes = federationProposal
+    ? useUserGnarsVotesAsOfBlock(federationProposal?.startBlock ?? undefined)
+    : useUserVotesAsOfBlock(proposal?.createdBlock);
   //useUserVotesAsOfBlock(federationProposal ? federationProposal?.startBlock : proposal?.createdBlock) ?? 1//0;
-  const hasVoted = federationProposal ? useHasVotedOnFederationProposal(federationProposal?.id) : !snapshotProposal ? useHasVotedOnProposal(proposal?.id) : useHasVotedOnSnapshotProposal(snapshotVoters) 
-  const proposalVote = federationProposal ? useFederationProposalVote(federationProposal?.id) : useProposalVote(proposal?.id);
-  const proposalCreationTimestamp = federationProposal ? useBlockTimestamp(federationProposal?.startBlock) : !snapshotProposal ? useBlockTimestamp(proposal?.createdBlock) : useBlockTimestamp(Number(snapshotProposal?.snapshot))
+  const hasVoted = federationProposal
+    ? useHasVotedOnFederationProposal(federationProposal?.id)
+    : !snapshotProposal
+    ? useHasVotedOnProposal(proposal?.id)
+    : useHasVotedOnSnapshotProposal(snapshotVoters);
+  const proposalVote = federationProposal
+    ? useFederationProposalVote(federationProposal?.id)
+    : useProposalVote(proposal?.id);
+  const proposalCreationTimestamp = federationProposal
+    ? useBlockTimestamp(federationProposal?.startBlock)
+    : !snapshotProposal
+    ? useBlockTimestamp(proposal?.createdBlock)
+    : useBlockTimestamp(Number(snapshotProposal?.snapshot));
   const disableVoteButton = !isWalletConnected || !availableVotes;
 
   const voteButton = (
@@ -85,7 +106,6 @@ console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isA
     </a>
   );
 
-
   const proposedAtTransactionHash = (
     <>
       at{' '}
@@ -99,7 +119,7 @@ console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isA
     <>
       <div className="d-flex justify-content-between align-items-center">
         <div className="d-flex justify-content-start align-items-start">
-          <Link to={isNounsDAOProp ? '/vote/nounsdao' : '/vote' }>
+          <Link to={isNounsDAOProp ? '/vote/nounsdao' : '/vote'}>
             <button className={clsx(classes.backButton, navBarButtonClasses.whiteInfo)}>←</button>
           </Link>
           <div className={classes.headerRow}>
@@ -135,18 +155,15 @@ console.log(`federationProposala: ${federationProposal}. isActiveForVoting=${isA
                 tip={proposal && proposal.proposer ? proposal.proposer : ''}
                 id="byLineHoverCard"
               > */}
-                <h3>
-                  {proposer}
-                  <span className={classes.propTransactionWrapper}>
-                    {proposedAtTransactionHash}
-                  </span>
-                </h3>
+              <h3>
+                {proposer}
+                <span className={classes.propTransactionWrapper}>{proposedAtTransactionHash}</span>
+              </h3>
               {/* </HoverCard> */}
             </div>
           </>
         }
       </div>
-
 
       {isMobile && (
         <div className={classes.mobileSubmitProposalButton}>{isActiveForVoting && voteButton}</div>

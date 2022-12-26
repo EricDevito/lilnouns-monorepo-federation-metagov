@@ -81,6 +81,7 @@ export interface FederationProposal {
   status: FederationProposalState;
   executionWindow?: number; //The window in *blocks* that a proposal which has met quorum can be executed
   // result: FederationProposalResult;
+  totalVotes?: number;
 }
 
 export interface FederationProposalSubgraphEntity {
@@ -97,7 +98,9 @@ export interface FederationProposalSubgraphEntity {
   vetoed: boolean | false;
   executed: boolean | false;
   status: keyof typeof FederationProposalState;
+  executionWindow?: number;
   // result: keyof typeof FederationProposalResult;
+  totalVotes?: number;
 }
 
 export interface FederationProposalData {
@@ -126,6 +129,16 @@ const proposalCreatedFilter = (federationContract: Contract) => {
     ),
     fromBlock,
   };
+};
+export const useFederationCurrentExecutionWindow = (): number | undefined => {
+  const [executionWindow] =
+    useContractCall<[EthersBN]>({
+      abi,
+      address: federationAddress,
+      method: 'execWindow',
+      args: [],
+    }) || [];
+  return executionWindow?.toNumber();
 };
 //* GOOD
 export const useFederationCurrentQuorum = (): number | undefined => {
@@ -228,6 +241,8 @@ const getFederationProposalState = (
 //TODO: figure out why this doesn't work
 export const useFederationProposalResult = (
   proposalId: string | undefined,
+  votes?: number[] | undefined,
+  quorumVotes?: number,
 ): FederationProposalResult => {
   const { account } = useEthers();
 
@@ -240,21 +255,51 @@ export const useFederationProposalResult = (
       args: [proposalId, account],
     }) || [];
 
+  console.log(`result: ${result}`);
+
   const voteResult = result?.toNumber();
 
-  if (voteResult === 0) {
-    return FederationProposalResult.For;
-  } else if (voteResult === 1) {
-    return FederationProposalResult.Against;
-  } else if (voteResult === 2) {
-    return FederationProposalResult.Abstain;
-  } else if (voteResult === 3) {
+  const forCount = votes?.at(0) ?? 0;
+  const againstCount = votes?.at(1) ?? 0;
+  const abstainCount = votes?.at(2) ?? 0;
+  const quorum = quorumVotes ?? 0;
+  const totalVotes = forCount + againstCount + abstainCount;
+
+  if (voteResult) {
+    if (voteResult === 0) {
+      return FederationProposalResult.For;
+    } else if (voteResult === 1) {
+      return FederationProposalResult.Against;
+    } else if (voteResult === 2) {
+      return FederationProposalResult.Abstain;
+    } else if (voteResult === 3) {
+      return FederationProposalResult.Undecided;
+    } else if (totalVotes < quorum) {
+      return FederationProposalResult.Undecided;
+    }
+
+    console.log(`federationProposalResult: voteResult: ${result}.}`);
+
+    return 4; //undefined == 4
+  } else {
+    if (totalVotes < quorum) {
+      return FederationProposalResult.Undecided;
+    }
+
+    if (abstainCount > forCount && abstainCount > againstCount) {
+      return FederationProposalResult.Abstain;
+    }
+
+    if (againstCount > forCount) {
+      return FederationProposalResult.Against;
+    }
+
+    if (forCount > againstCount) {
+      return FederationProposalResult.For;
+    }
+
     return FederationProposalResult.Undecided;
   }
-
-  console.log(`voteResult: ${result}.}`);
-
-  return 4;
 };
 
 // get active proposals in federation contract
@@ -297,7 +342,13 @@ export const useAllFederationProposalsViaSubgraph = (): FederationProposalData =
 
   const blockNumber = useBlockNumber() ?? 0;
 
+
+
   const proposals = data?.proposals.map((proposal: FederationProposalSubgraphEntity) => {
+    const forVotes =  parseInt(proposal.forVotes);
+    const againstVotes = parseInt(proposal.againstVotes)
+    const abstainVotes = parseInt(proposal.abstainVotes)
+
     return {
       id: proposal.id,
       proposer: proposal.proposer,
@@ -306,10 +357,12 @@ export const useAllFederationProposalsViaSubgraph = (): FederationProposalData =
       quorumVotes: parseInt(proposal.quorumVotes),
       startBlock: parseInt(proposal.startBlock),
       endBlock: parseInt(proposal.endBlock),
-      forCount: parseInt(proposal.forVotes),
-      againstCount: parseInt(proposal.againstVotes),
-      abstainCount: parseInt(proposal.abstainVotes),
+      forCount: forVotes,
+      againstCount: againstVotes,
+      abstainCount: abstainVotes,
       status: getFederationProposalState(blockNumber, proposal),
+      executionWindow: 2500,//useFederationCurrentExecutionWindow() || 0
+      totalVotes: forVotes + againstVotes + abstainVotes
     };
   });
 
@@ -352,6 +405,11 @@ export const useAllFederationProposalsViaChain = (skip = false): FederationPropo
 
     return {
       data: proposals.map((proposal, i) => {
+
+        const forVotes =  parseInt(proposal?.forVotes?.toString() ?? '0')
+        const againstVotes = parseInt(proposal?.againstVotes?.toString() ?? '0')
+        const abstainVotes = parseInt(proposal?.abstainVotes?.toString() ?? '0')
+
         return {
           id: proposal?.id?.toString(),
           proposer: proposal?.proposer,
@@ -366,6 +424,8 @@ export const useAllFederationProposalsViaChain = (skip = false): FederationPropo
           vetoed: proposal?.vetoed || false,
           executed: proposal?.executed || false,
           status: federationproposalStates[i]?.[0] ?? FederationProposalState.UNDETERMINED,
+          executionWindow: 2500,//useFederationCurrentExecutionWindow() || 0
+          totalVotes: forVotes + againstVotes + abstainVotes
         };
       }),
       loading: false,
@@ -374,9 +434,13 @@ export const useAllFederationProposalsViaChain = (skip = false): FederationPropo
 };
 //* GOOD
 export const useAllFederationProposals = (): FederationProposalData => {
-  // const subgraph = useAllFederationProposalsViaSubgraph();
-  const onchain = useAllFederationProposalsViaChain(false); //(!subgraph.error);
-  return onchain; //subgraph?.error ? onchain : subgraph;
+
+  const subgraph = useAllFederationProposalsViaSubgraph();
+  const onchain = useAllFederationProposalsViaChain(!subgraph.error);
+  return subgraph?.error ? onchain : subgraph;
+
+  // const onchain = useAllFederationProposalsViaChain(false);
+  // return onchain; 
 };
 //* GOOD
 export const useFederationProposal = (id: string | number) => {
