@@ -110,11 +110,11 @@ const SnapshotVoteModalModal = ({
 
   // Auto close the modal after a transaction completes succesfully
   // Leave failed transaction up until user closes manually to allow for debugging
-  // useEffect(() => {
-  //   if (isVoteSucessful) {
-  //     setTimeout(onHide, POST_SUCESSFUL_VOTE_MODAL_CLOSE_TIME_MS);
-  //   }
-  // }, [isVoteSucessful, onHide]);
+  useEffect(() => {
+    if (isVoteSucessful) {
+      setTimeout(onHide, POST_SUCESSFUL_VOTE_MODAL_CLOSE_TIME_MS);
+    }
+  }, [isVoteSucessful, onHide]);
 
   // If show is false (i.e. on hide) reset failure related state variables
   useEffect(() => {
