@@ -6,7 +6,7 @@ import { useHistory } from 'react-router-dom';
 import { useBlockNumber, useEthers } from '@usedapp/core';
 import { isMobileScreen } from '../../utils/isMobile';
 import clsx from 'clsx';
-import { useNounTokenBalance, useUserDelegatee, useUserVotes } from '../../wrappers/nounToken';
+import { useNounTokenBalance, useUserDelegatee, useUserVotes, useUserVotesAsOfBlock } from '../../wrappers/nounToken';
 import { ClockIcon } from '@heroicons/react/solid';
 import proposalStatusClasses from '../ProposalStatus/ProposalStatus.module.css';
 import dayjs from 'dayjs';
@@ -39,17 +39,17 @@ const getCountdownCopy = (
   const startDate =
     proposal && timestamp && currentBlock
       ? dayjs(timestamp).add(
-          AVERAGE_BLOCK_TIME_IN_SECS * (proposal.startBlock - currentBlock),
-          'seconds',
-        )
+        AVERAGE_BLOCK_TIME_IN_SECS * (proposal.startBlock - currentBlock),
+        'seconds',
+      )
       : undefined;
 
   const endDate =
     proposal && timestamp && currentBlock
       ? dayjs(timestamp).add(
-          AVERAGE_BLOCK_TIME_IN_SECS * (proposal.endBlock - currentBlock),
-          'seconds',
-        )
+        AVERAGE_BLOCK_TIME_IN_SECS * (proposal.endBlock - currentBlock),
+        'seconds',
+      )
       : undefined;
 
   const expiresDate = proposal && dayjs(proposal.eta).add(14, 'days');
@@ -373,12 +373,14 @@ export const BigNounProposalRow = ({
 
 const Proposals = ({
   proposals,
+  proposalsAwaitingVote,
   nounsDAOProposals,
   snapshotProposals,
   federationProposals,
   isNounsDAOProp,
 }: {
   proposals: Proposal[];
+  proposalsAwaitingVote: Proposal[];
   nounsDAOProposals: Proposal[];
   snapshotProposals: SnapshotProposal[] | undefined;
   federationProposals: FederationProposal[] | null;
@@ -413,6 +415,36 @@ const Proposals = ({
     }
     return 'Connect wallet to make a proposal.';
   };
+
+  const filteredProposals = () => {
+    if (account == null && connectedAccountNounVotes > 0) {
+      const propSnapshots = proposalsAwaitingVote
+        .slice(0)
+        .reverse()
+        .map(function (prop) {
+          const availableVotes = useUserVotesAsOfBlock(prop.createdBlock ?? 0) ?? 0;
+          return { id: prop.id, balance: availableVotes };
+        })
+        .filter(p => p.balance > 0)
+        .map(a => a.id);
+
+      return proposalsAwaitingVote
+        .filter(a => propSnapshots.includes(a.id))
+        .slice(0)
+        .reverse();
+    }
+    return [];
+  };
+
+  const proposalsToVoteOn = filteredProposals();
+
+  const proposalsToVoteOnIds = proposalsToVoteOn.map(a => a.id && a.id);
+  const allProposals = proposalsToVoteOn.length
+    ? proposals
+      .slice(0)
+      .reverse()
+      .filter(a => a.id && !proposalsToVoteOnIds.includes(a.id))
+    : proposals.slice(0).reverse();
 
   return (
     <>
@@ -478,11 +510,16 @@ const Proposals = ({
               </Button>
             </div>
           )}
+
+          <ProposalTable proposals={proposalsToVoteOn} />
+
           {proposals?.length ? (
-            proposals
-              .slice(0)
-              .reverse()
-              .map(p => <LilNounProposalRow proposal={p} key={p.id} />)
+            <>
+              <span className={classes.subHeaderRow}>All Proposals</span>
+              {allProposals.map(p => (
+                <LilNounProposalRow proposal={p} key={p.id} />
+              ))}
+            </>
           ) : (
             <Alert variant="secondary">
               <Alert.Heading>No proposals found</Alert.Heading>
