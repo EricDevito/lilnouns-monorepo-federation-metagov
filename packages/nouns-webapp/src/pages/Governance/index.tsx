@@ -16,12 +16,12 @@ import { snapshotProposalsQuery, nounsInTreasuryQuery } from '../../wrappers/sub
 import { useQuery } from '@apollo/client';
 import Link from '../../components/Link';
 import { RouteComponentProps } from 'react-router-dom';
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom';
 import { useAllFederationProposals } from '../../wrappers/federation';
 
 const GovernancePage = ({
   match: {
-    params: { id }
+    params: { id },
   },
 }: RouteComponentProps<{ id: string }>) => {
   const { data: proposals, loading: loadingProposals } = useAllProposals();
@@ -59,10 +59,9 @@ const GovernancePage = ({
 
   const isMobile = isMobileScreen();
 
-
   //* Federation
-  const { data: federationProposals, loading: loadingFederationProposals } = useAllFederationProposals();
-
+  const { data: federationProposals, loading: loadingFederationProposals } =
+    useAllFederationProposals();
 
   function setLilNounsDAOProps() {
     setDaoButtonActive('1');
@@ -91,16 +90,15 @@ const GovernancePage = ({
     <Link text="Snapshot" url="https://snapshot.org/#/leagueoflils.eth" leavesPage={true} />
   );
 
-  const federationLink = (
-    <Link text="Federation" url="https://federation.wtf" leavesPage={true} />
-  )
+  const federationLink = <Link text="Federation" url="https://federation.wtf" leavesPage={true} />;
 
   if (
     nounsInTreasuryLoading ||
     snapshotProposalLoading ||
     loadingBigNounProposals ||
     loadingProposals ||
-    loadingFederationProposals
+    loadingFederationProposals ||
+    loadingProposalVotes
   ) {
     return (
       <div className={classes.spinner}>
@@ -109,8 +107,10 @@ const GovernancePage = ({
     );
   }
 
-  const nounCount = nounsInTreasury.accounts.length ? nounsInTreasury.accounts[0].tokenBalance : "0"
-  
+  const nounCount = nounsInTreasury.accounts.length
+    ? nounsInTreasury.accounts[0].tokenBalance
+    : '0';
+
   return (
     <Section fullWidth={false} className={classes.section}>
       <Col lg={10} className={classes.wrapper}>

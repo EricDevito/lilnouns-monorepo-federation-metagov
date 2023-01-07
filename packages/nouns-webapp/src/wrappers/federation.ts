@@ -223,7 +223,7 @@ const getFederationProposalState = (
   proposal: FederationProposalSubgraphEntity,
 ) => {
 
-  console.log(`blockNumber: ${blockNumber}. endblock:${parseInt(proposal.endBlock)}`);
+  // console.log(`blockNumber: ${blockNumber}. endblock:${parseInt(proposal.endBlock)}`);
   
   if (proposal.vetoed) {
     return FederationProposalState.VETOED;

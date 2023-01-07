@@ -1,4 +1,8 @@
-import { Proposal, ProposalState, useProposalThreshold } from '../../wrappers/nounsDao';
+import {
+  Proposal,
+  ProposalState,
+  useProposalThreshold,
+} from '../../wrappers/nounsDao';
 import { Alert, Button } from 'react-bootstrap';
 import ProposalStatus from '../ProposalStatus';
 import classes from './Proposals.module.css';
@@ -17,6 +21,7 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import advanced from 'dayjs/plugin/advancedFormat';
 import { AVERAGE_BLOCK_TIME_IN_SECS } from '../../utils/constants';
+import ProposalTable from '../ProposalTable';
 import {
   FederationProposal,
   FederationProposalState,
@@ -28,7 +33,7 @@ dayjs.extend(timezone);
 dayjs.extend(advanced);
 dayjs.extend(relativeTime);
 
-const getCountdownCopy = (
+ const getCountdownCopy = (
   proposal: Proposal,
   currentBlock: number,
   propState?: ProposalState,
@@ -119,7 +124,10 @@ const getCountdownCopy = (
       federationPropExecutionWindowDate
     ) {
       //* Federation voting lasts up until endblock if quroum is not met
-      if (federationProposal.quorumVotes > federationProposal.forCount && federationPropExecutionWindowDate.isBefore(now)) {
+      if (
+        federationProposal.quorumVotes > federationProposal.forCount &&
+        federationPropExecutionWindowDate.isBefore(now)
+      ) {
         return `Lil Nouns Voting Ends ${federationEndDate.fromNow()}`;
       }
 
@@ -206,7 +214,11 @@ export interface SnapshotProposal {
   [key: string]: any;
 }
 
-export const LilNounProposalRow = ({ proposal }: { proposal: Proposal }) => {
+export const LilNounProposalRow = ({
+  proposal,
+}: {
+  proposal: Proposal;
+}) => {
   const currentBlock = useBlockNumber();
 
   const isPropInStateToHaveCountDown =
@@ -551,10 +563,10 @@ const allProposals = proposalsToVoteOn.length
                     if (parseInt(p.id) >= parseInt(firstFederationProp.eID)) {
                       return true;
                     }
-                    return false
+                    return false;
                   }
 
-                  return false
+                  return false;
                 };
 
                 const snapshotVoteObject = snapshotProposals.find(spi =>
